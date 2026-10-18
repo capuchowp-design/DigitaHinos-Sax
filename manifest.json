@@ -1,7 +1,7 @@
 {
   "name": "Sax Bounce - Visualizador MIDI",
   "short_name": "Sax Bounce",
-  "description": "Visualizador MIDI com saxofone animado",
+  "description": "Visualizador MIDI e MusicXML com saxofone animado",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "any",
