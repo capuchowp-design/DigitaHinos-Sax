@@ -9,13 +9,20 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192x192.png">
     <meta name="theme-color" content="#fcad2a">
-    <div class="hino-modal" id="mHinos" hidden>
+    <div class="hino-modal" id="mPro" hidden>
+  <div class="hino-sheet">
+    <div class="hino-head"><h2>⭐ Modo Pro</h2><button class="hino-x" id="proClose" aria-label="Fechar">✕</button></div>
+    <div class="hino-body" id="proBody"></div>
+  </div>
+</div>
+<div class="hino-modal" id="mHinos" hidden>
   <div class="hino-sheet">
     <div class="hino-head"><h2>Hinos</h2><button class="hino-x" id="hinoClose" aria-label="Fechar">✕</button></div>
     <div class="hino-body"><input type="search" id="hinoQ" placeholder="Buscar por número ou título…" autocomplete="off"><div id="hinoList"></div></div>
   </div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script src="pro-config.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         @import url('https://cdn.jsdelivr.net/fontsource/fonts/inter@5/latin.css');
 
@@ -397,8 +404,27 @@
         .hino-item { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:10px 12px; margin:0 0 6px; background:var(--bg-btn); color:var(--text-main); border:1px solid var(--border-btn); border-radius:10px; cursor:pointer; font:500 14px Inter,sans-serif; }
         .hino-item:hover { border-color:#fcad2a; }
         .hino-item b { min-width:42px; color:#fcad2a; font-weight:800; }
+        .sel-btn { -webkit-appearance:none; appearance:none; background:var(--bg-btn) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a89a86' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 11px center; color:var(--text-main); border:1px solid var(--border-btn); border-radius:10px; padding:9px 34px 9px 14px; font:600 13px Inter,sans-serif; min-height:38px; max-width:47vw; cursor:pointer; text-overflow:ellipsis; }
+        .sel-btn:hover { border-color:#fcad2a; }
+        .sel-btn[hidden] { display:none; }
         .voice-chip.oct { padding:6px 10px; }
         .voice-chip.oct.on { --vc:#fcad2a; }
+.tab-btn.pro-on { background:linear-gradient(135deg,#f2c46b,#c8742a); color:#fff; border-color:transparent; }
+        .pro-top { background:rgba(252,173,42,.14); border:1px solid #fcad2a; color:var(--text-main); border-radius:10px; padding:10px 12px; font-weight:700; margin-bottom:10px; }
+        .pro-p { font-size:13px; line-height:1.5; margin:0 0 12px; }
+        .pro-small { font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.45; }
+        .pro-warn { color:#ff9a6a; font-weight:600; }
+        .pro-ok { font-size:18px; font-weight:800; color:#4ade80; margin-bottom:8px; }
+        .pro-step { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--border-main); font-size:13px; }
+        .pro-step > span { flex:0 0 26px; height:26px; border-radius:50%; background:#fcad2a; color:#1a1208; font-weight:800; display:flex; align-items:center; justify-content:center; }
+        .pro-step > div { flex:1; min-width:0; }
+        .pro-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+        .pro-btn { background:linear-gradient(135deg,#f2c46b,#c8742a); color:#1a1208; border:none; border-radius:9px; padding:9px 14px; font:700 13px Inter,sans-serif; cursor:pointer; text-decoration:none; display:inline-block; }
+        .pro-btn.sec { background:var(--bg-btn); color:var(--text-main); border:1px solid var(--border-btn); }
+        .pro-btn:disabled { opacity:.6; cursor:wait; }
+        .pro-code { flex:1; min-width:140px; padding:9px 11px; border-radius:9px; border:1px solid var(--border-main); background:var(--bg-btn); color:var(--text-main); font:700 15px monospace; letter-spacing:1px; text-transform:uppercase; }
+        .pro-msg { font-size:12px; margin-top:6px; min-height:16px; color:var(--text-muted); }
+        .pro-msg.err { color:#ff7a7a; font-weight:600; }
 </style>
 </head>
 <body>
@@ -421,6 +447,7 @@
         </button>
         <div class="synth-badge" id="synthBadge"><span class="dot"></span>Carregando…</div>
         <span class="file-name" id="fileName"></span>
+        <button class="tab-btn" id="proBtn" title="Modo Pro: todos os hinos completos">⭐ Pro</button>
         <button class="tab-btn" id="hinosBtn" title="Biblioteca de hinos">📖 <span>Hinos</span></button>
         <button class="theme-btn" id="themeBtn" title="Alternar modo claro/escuro">🌙</button>
         <label class="file-label">
@@ -492,10 +519,10 @@
         <div class="piano-container"><canvas id="pianoCanvas"></canvas></div>
     </div>
     <div class="voice-bar" id="voiceBar" hidden>
-        <span class="vb-label">Vozes:</span>
-        <div id="voiceChips" style="display:contents"></div>
-        <span class="vb-label" id="octLabel" style="margin-left:10px" hidden>Oitava acima:</span>
-        <div id="octChips" style="display:contents"></div>
+        <span class="vb-label">Voz:</span>
+        <select id="voiceSelect" class="sel-btn" aria-label="Voz a executar"></select>
+        <span class="vb-label" id="octLabel" hidden>Oitava:</span>
+        <select id="octSelect" class="sel-btn" aria-label="Oitava" hidden></select>
     </div>
     <div class="controls-bar">
         <div class="transport-group">
@@ -1296,6 +1323,133 @@ function resizeCanvases(){
 window.addEventListener('resize',()=>{ resizeCanvases(); if(state.midiLoaded) drawScene(); });
 
 // ======================== MIDI LOADING ========================
+// ======================== MODO PRO (grátis x pro) ========================
+// Grátis: todos os hinos, mas só PRO_CFG.previewSec s de reprodução (qualquer voz); hinos 1..freeHinos completos.
+// Pro: tudo liberado, ativado com um código de uso único (1 código = 1 aparelho) validado numa planilha Google (Apps Script).
+const PRO_CFG=window.PRO_CFG||{app:'app',scriptUrl:'',pixKey:'',pixName:'',pixCity:'',price:0,whatsapp:'',freeHinos:5,previewSec:15};
+const PRO={ok:false,code:'',dev:'',last:0,native:false,devId:''};
+function proSave(){ try{ if(PRO.ok) localStorage.setItem('proState',JSON.stringify({code:PRO.code,dev:PRO.dev,last:PRO.last})); else localStorage.removeItem('proState'); }catch(e){} }
+function proLoad(){ try{ const s=JSON.parse(localStorage.getItem('proState')||'null'); if(s&&s.code){ PRO.ok=true; PRO.code=s.code; PRO.dev=s.dev||''; PRO.last=s.last||0; } }catch(e){} }
+async function proSha(txt){
+    try{ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(txt)); return [...new Uint8Array(b)].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+    catch(e){ let h=0; for(const ch of txt) h=(h*31+ch.charCodeAt(0))|0; return 'x'+(h>>>0).toString(16); }
+}
+// identificador do aparelho: Android ID (app instalado; sobrevive a desinstalar/limpar dados) ou impressão digital do navegador
+async function proDevice(){
+    if(PRO.devId) return PRO.devId;
+    const C=window.Capacitor;
+    if(C&&C.isNativePlatform&&C.isNativePlatform()){
+        try{ const D=C.Plugins&&C.Plugins.Device; if(D&&D.getId){ const r=await D.getId(); const id=r&&(r.identifier||r.uuid); if(id){ PRO.native=true; return PRO.devId='n-'+id; } } }catch(e){}
+    }
+    let st=''; try{ st=localStorage.getItem('proDev')||''; }catch(e){}
+    if(!st){
+        let gl=''; try{ const c=document.createElement('canvas').getContext('webgl'), x=c&&c.getExtension('WEBGL_debug_renderer_info'); if(x) gl=c.getParameter(x.UNMASKED_RENDERER_WEBGL)+'|'+c.getParameter(x.UNMASKED_VENDOR_WEBGL); }catch(e){}
+        const fp=[navigator.platform,screen.width+'x'+screen.height,window.devicePixelRatio,Intl.DateTimeFormat().resolvedOptions().timeZone,navigator.language,navigator.hardwareConcurrency,navigator.deviceMemory,gl].join('|');
+        st='w-'+await proSha(fp); try{ localStorage.setItem('proDev',st); }catch(e){}
+    }
+    return PRO.devId=st;
+}
+async function proCall(body){
+    if(!/^https?:/.test(PRO_CFG.scriptUrl)) throw new Error('config');
+    const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),20000);
+    try{
+        const r=await fetch(PRO_CFG.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({app:PRO_CFG.app},body)),signal:ctl.signal,redirect:'follow'});
+        return await r.json();
+    } finally { clearTimeout(to); }
+}
+const PRO_MSG={invalido:'Código não encontrado. Confira se digitou certo.',bloqueado:'Este código foi bloqueado. Fale com o suporte.',outro_dispositivo:'Este código já foi usado em outro aparelho. Cada código vale para um único aparelho.',dispositivo_invalido:'Não foi possível identificar este aparelho.',servidor:'Erro no servidor de ativação. Tente de novo em instantes.'};
+async function proActivate(raw){
+    const code=String(raw||'').trim(); if(!code) return {ok:false,msg:'Digite o código.'};
+    let dev; try{ dev=await proDevice(); }catch(e){ return {ok:false,msg:PRO_MSG.dispositivo_invalido}; }
+    let r; try{ r=await proCall({acao:'ativar',codigo:code,dispositivo:dev}); }
+    catch(e){ return {ok:false,msg:e.message==='config'?'O servidor de ativação ainda não foi configurado neste app.':'Sem conexão com o servidor. Conecte-se à internet e tente de novo.'}; }
+    if(r&&r.ok){ PRO.ok=true; PRO.code=code.toUpperCase(); PRO.dev=dev; PRO.last=Date.now(); proSave(); proRefresh(); return {ok:true,status:r.status}; }
+    return {ok:false,msg:PRO_MSG[r&&r.erro]||'Não foi possível ativar.'};
+}
+async function proInit(){
+    proLoad(); proRefresh();
+    try{
+        const dev=await proDevice();
+        if(PRO.ok){
+            if(Date.now()-PRO.last>24*3600e3){          // revalida 1x por dia; sem internet, continua liberado
+                try{
+                    const r=await proCall({acao:'verificar',codigo:PRO.code,dispositivo:PRO.dev||dev});
+                    if(r&&r.ok){ PRO.last=Date.now(); proSave(); }
+                    else if(r&&['bloqueado','outro_dispositivo','invalido'].includes(r.erro)){ PRO.ok=false; proSave(); proRefresh(); toast('O acesso Pro deste aparelho foi encerrado.'); }
+                }catch(e){}
+            }
+        } else if(PRO.native){                           // reinstalou ou limpou os dados: o Android ID é o mesmo → recupera sozinho
+            try{
+                const r=await proCall({acao:'restaurar',dispositivo:dev});
+                if(r&&r.ok&&r.codigo){ PRO.ok=true; PRO.code=r.codigo; PRO.dev=dev; PRO.last=Date.now(); proSave(); proRefresh(); toast('Acesso Pro restaurado neste aparelho ✓','success'); }
+            }catch(e){}
+        }
+    }catch(e){}
+}
+// limite de reprodução do hino atual (Infinity = sem limite)
+function proLimit(){
+    if(PRO.ok) return Infinity;
+    const n=state.hinoN; if(n==null||n<=PRO_CFG.freeHinos) return Infinity;
+    return PRO_CFG.previewSec;
+}
+// ---- Pix "copia e cola" (BR Code estático, com valor) ----
+function proCrc16(s){ let c=0xFFFF; for(let i=0;i<s.length;i++){ c^=s.charCodeAt(i)<<8; for(let j=0;j<8;j++) c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF; } return c.toString(16).toUpperCase().padStart(4,'0'); }
+function proPixPayload(){
+    const clean=(t,n)=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9 ]/g,'').toUpperCase().slice(0,n);
+    const f=(id,v)=>id+String(v.length).padStart(2,'0')+v;
+    const mai=f('00','br.gov.bcb.pix')+f('01',String(PRO_CFG.pixKey).trim());
+    const amt=PRO_CFG.price>0?Number(PRO_CFG.price).toFixed(2):'';
+    let p=f('00','01')+f('26',mai)+f('52','0000')+f('53','986')+(amt?f('54',amt):'')+f('58','BR')+f('59',clean(PRO_CFG.pixName,25)||'RECEBEDOR')+f('60',clean(PRO_CFG.pixCity,15)||'BRASIL')+f('62',f('05','***'))+'6304';
+    return p+proCrc16(p);
+}
+// ---- interface ----
+function proRefresh(){
+    const b=document.getElementById('proBtn'); if(b){ b.textContent=PRO.ok?'✓ Pro':'⭐ Pro'; b.classList.toggle('pro-on',PRO.ok); }
+    try{ if(typeof renderHinos==='function'&&!document.getElementById('mHinos').hidden) renderHinos(); }catch(e){}
+    try{ updateUI(); }catch(e){}
+    if(!document.getElementById('mPro').hidden) proRender();
+}
+function proCopy(txt,okMsg){
+    const done=()=>toast(okMsg,'success');
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done,()=>proCopyOld(txt,done)); else proCopyOld(txt,done);
+}
+function proCopyOld(txt,done){ const t=document.createElement('textarea'); t.value=txt; t.style.position='fixed'; t.style.opacity='0'; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); done(); }catch(e){} t.remove(); }
+let proReason='';
+function proPaywall(reason){ proReason=reason||''; document.getElementById('mPro').hidden=false; proRender(); }
+function proClose(){ document.getElementById('mPro').hidden=true; }
+async function proRender(){
+    const box=document.getElementById('proBody'); if(!box) return;
+    const price=PRO_CFG.price>0?'R$ '+Number(PRO_CFG.price).toFixed(2).replace('.',','):'';
+    if(PRO.ok){
+        const dev=PRO.dev?PRO.dev.slice(0,10)+'…':'';
+        box.innerHTML='<div class="pro-ok">✓ Pro ativo neste aparelho</div><p class="pro-p">Todos os 480 hinos estão liberados, completos e com qualquer voz.</p><p class="pro-p pro-small">Código: <b></b><br>Aparelho: '+dev+'<br>O acesso continua mesmo se você desinstalar o app ou limpar os dados (basta digitar o mesmo código neste aparelho, ou ele é restaurado sozinho no app instalado). O código não funciona em outro aparelho.</p>';
+        box.querySelector('b').textContent=PRO.code; return;
+    }
+    const msgTop=proReason==='fim'?'Fim da prévia de '+PRO_CFG.previewSec+' segundos.':proReason==='seek'?'A prévia grátis toca só os primeiros '+PRO_CFG.previewSec+' segundos.':'';
+    const configured=/^https?:/.test(PRO_CFG.scriptUrl)&&PRO_CFG.pixKey&&PRO_CFG.pixKey!=='SUA_CHAVE_PIX';
+    let dev=''; try{ dev=await proDevice(); }catch(e){}
+    box.innerHTML=(msgTop?'<div class="pro-top">'+msgTop+'</div>':'')+
+      '<p class="pro-p"><b>Grátis:</b> hinos 1 a '+PRO_CFG.freeHinos+' completos e '+PRO_CFG.previewSec+' s de prévia nos demais (todas as vozes).<br><b>Pro:</b> todos os hinos completos, com qualquer voz. Pagamento único via Pix'+(price?' · <b>'+price+'</b>':'')+'.</p>'+
+      (configured?'':'<p class="pro-p pro-warn">Atenção: o dono do app ainda não preencheu o arquivo pro-config.js (chave Pix e endereço do script).</p>')+
+      '<div class="pro-step"><span>1</span><div><b>Pague via Pix</b><div class="pro-row"><button class="pro-btn" id="proCopyPix">Copiar Pix copia e cola</button><button class="pro-btn sec" id="proCopyKey">Copiar chave</button></div><div class="pro-small" id="proKeyTxt"></div></div></div>'+
+      '<div class="pro-step"><span>2</span><div><b>Envie o comprovante</b><div class="pro-row"><a class="pro-btn" id="proWa" target="_blank" rel="noopener">Enviar no WhatsApp</a></div><div class="pro-small">Você recebe um código de uso único.</div></div></div>'+
+      '<div class="pro-step"><span>3</span><div><b>Digite o código</b><div class="pro-row"><input id="proCode" class="pro-code" placeholder="PRO-XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false"><button class="pro-btn" id="proGo">Ativar</button></div><div class="pro-msg" id="proMsg"></div></div></div>';
+    document.getElementById('proKeyTxt').textContent=PRO_CFG.pixKey&&PRO_CFG.pixKey!=='SUA_CHAVE_PIX'?'Chave: '+PRO_CFG.pixKey+(PRO_CFG.pixName?' · '+PRO_CFG.pixName:''):'';
+    document.getElementById('proCopyPix').onclick=()=>{ try{ proCopy(proPixPayload(),'Pix copia e cola copiado! Cole no app do seu banco.'); }catch(e){ toast('Erro ao gerar o Pix'); } };
+    document.getElementById('proCopyKey').onclick=()=>proCopy(String(PRO_CFG.pixKey),'Chave Pix copiada!');
+    const txt='Olá! Paguei o modo Pro do '+PRO_CFG.app+' via Pix. Segue o comprovante. (aparelho '+String(dev).slice(0,10)+')';
+    document.getElementById('proWa').href='https://wa.me/'+String(PRO_CFG.whatsapp).replace(/\D/g,'')+'?text='+encodeURIComponent(txt);
+    const go=async()=>{
+        const m=document.getElementById('proMsg'), btn=document.getElementById('proGo'); m.textContent='Verificando…'; m.className='pro-msg'; btn.disabled=true;
+        const r=await proActivate(document.getElementById('proCode').value);
+        btn.disabled=false;
+        if(r.ok){ toast(r.status==='restaurado'?'Acesso Pro restaurado neste aparelho ✓':'Pro ativado! Obrigado pelo apoio ✓','success'); proRender(); }
+        else { m.textContent=r.msg; m.className='pro-msg err'; }
+    };
+    document.getElementById('proGo').onclick=go;
+    document.getElementById('proCode').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+}
+
 async function loadBuffer(buf,name){
     loadingOverlay.classList.add('active');
     fileNameEl.textContent=name;
@@ -1325,7 +1479,7 @@ function renderHinos(){
     const list=HINOS.filter(h=>!q||String(h.n).padStart(3,'0').includes(q.replace(/^0+(?=\d)/,''))||String(h.n)===q||normTxt(h.t).includes(q));
     if(!list.length){ box.textContent='Nenhum hino encontrado.'; return; }
     const fr=document.createDocumentFragment();
-    list.forEach(h=>{ const b=document.createElement('button'); b.className='hino-item'; b.innerHTML='<b>'+String(h.n).padStart(3,'0')+'</b><span></span>'; b.lastChild.textContent=h.t; b.onclick=()=>openHino(h); fr.appendChild(b); });
+    list.forEach(h=>{ const b=document.createElement('button'); b.className='hino-item'; const lock=!PRO.ok&&h.n>PRO_CFG.freeHinos; b.innerHTML='<b>'+String(h.n).padStart(3,'0')+'</b><span style="flex:1"></span>'+(lock?'<small style="opacity:.65;white-space:nowrap">🔒 '+PRO_CFG.previewSec+'s</small>':''); b.children[1].textContent=h.t; b.onclick=()=>openHino(h); fr.appendChild(b); });
     box.appendChild(fr);
 }
 function closeHinos(){ document.getElementById('mHinos').hidden=true; }
@@ -1340,13 +1494,19 @@ async function openHino(h){
         const r=await fetch('hinos/'+h.f); if(!r.ok) throw new Error('arquivo não encontrado');
         switchView('player');
         await loadBuffer(await r.arrayBuffer(),String(h.n).padStart(3,'0')+' – '+h.t);
+        state.hinoN=h.n; updateUI();
+        if(proLimit()<Infinity) toast('Prévia de '+PRO_CFG.previewSec+' s · hinos 1 a '+PRO_CFG.freeHinos+' são completos · toque em ⭐ Pro para liberar tudo');
     }catch(e){ loadingOverlay.classList.remove('active'); toast('Erro: '+e.message); }
 }
 document.getElementById('hinosBtn').addEventListener('click',openHinos);
+document.getElementById('proBtn').addEventListener('click',()=>proPaywall(''));
+document.getElementById('proClose').addEventListener('click',proClose);
+document.getElementById('mPro').addEventListener('click',e=>{ if(e.target.id==='mPro') proClose(); });
+proInit();
 document.getElementById('hinoClose').addEventListener('click',closeHinos);
 document.getElementById('mHinos').addEventListener('click',e=>{ if(e.target.id==='mHinos') closeHinos(); });
 document.getElementById('hinoQ').addEventListener('input',renderHinos);
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeHinos(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeHinos(); proClose(); } });
 
 // ---- oitava acima por voz (soprano e tenor): a voz inteira sobe 8ª, sem dobrar nota por nota ----
 function octStore(){ try{ return JSON.parse(localStorage.getItem('saxOct')||'{}'); }catch(e){ return {}; } }
@@ -1358,32 +1518,36 @@ function octRange(){
     state.lowestNote=Math.max(21,mn-2); state.highestNote=Math.min(108,mx+2);
     while(state.highestNote-state.lowestNote<23){ if(state.lowestNote>21) state.lowestNote--; if(state.highestNote<108) state.highestNote++; }
 }
-function buildOctChips(){
-    const box=document.getElementById('octChips'), lab=document.getElementById('octLabel'), st=octStore();
-    box.innerHTML=''; state.octUp={};
-    const vs=state.voiceList.filter(v=>/^(soprano|tenor)$/i.test(v.name));
+const OCT_VOZES=/^(soprano|tenor)$/i;
+function buildOctSel(){
+    const sel=document.getElementById('octSelect'), lab=document.getElementById('octLabel'), st=octStore();
+    state.octUp={};
+    const vs=state.voiceList.filter(v=>OCT_VOZES.test(v.name));
     vs.forEach(v=>{ state.octUp[v.track]=!!st[String(v.name).toLowerCase()]; });
     octApply();
-    vs.forEach(v=>{
-        const b=document.createElement('button'); b.type='button'; b.className='voice-chip oct'; b.dataset.t=v.track;
-        b.title=v.name+' uma oitava acima (a voz inteira)'; b.style.setProperty('--vc',v.color);
-        b.textContent=v.name+' ↑8ª'; b.classList.toggle('on',!!state.octUp[v.track]);
-        b.addEventListener('click',()=>toggleOct(v));
-        box.appendChild(b);
-    });
-    lab.hidden=!vs.length;
+    state.octOpts=[{label:'Natural (como escrito)',set:[]}];
+    vs.forEach(v=>state.octOpts.push({label:v.name+' (+1 oitava)',set:[v.track]}));
+    if(vs.length>1) state.octOpts.push({label:vs.map(v=>v.name).join(' e ')+' (+1 oitava)',set:vs.map(v=>v.track)});
+    sel.innerHTML=state.octOpts.map((o,i)=>'<option value="'+i+'">'+o.label+'</option>').join('');
+    const cur=vs.filter(v=>state.octUp[v.track]).map(v=>v.track).sort().join(',');
+    const idx=state.octOpts.findIndex(o=>o.set.slice().sort().join(',')===cur);
+    sel.value=String(Math.max(0,idx));
+    sel.hidden=lab.hidden=!vs.length;
+    refreshVoiceBar();
 }
-function toggleOct(v){
-    state.octUp[v.track]=!state.octUp[v.track];
-    const st=octStore(); st[String(v.name).toLowerCase()]=state.octUp[v.track]; try{ localStorage.setItem('saxOct',JSON.stringify(st)); }catch(e){}
-    octApply(); octRange(); buildPianoKeys();
-    document.querySelectorAll('#octChips .voice-chip').forEach(b=>b.classList.toggle('on',!!state.octUp[+b.dataset.t]));
+document.getElementById('octSelect').addEventListener('change',e=>{
+    const o=state.octOpts&&state.octOpts[+e.target.value]; if(!o) return;
+    const st=octStore();
+    state.voiceList.filter(v=>OCT_VOZES.test(v.name)).forEach(v=>{ const on=o.set.includes(v.track); state.octUp[v.track]=on; st[String(v.name).toLowerCase()]=on; });
+    try{ localStorage.setItem('saxOct',JSON.stringify(st)); }catch(x){}
+    octApply(); octRange(); buildPianoKeys(); refreshVoiceBar();
     if(state.isPlaying){ const cp=state.currentTime; pausePlayback(); state.pausedAt=cp; startPlayback(); } else drawScene();
-}
+});
 
 async function applyNotes(notes, duration, names){
+    state.hinoN=null;                       // só vale para hino da biblioteca (openHino marca depois)
     notes.forEach(n=>{ n.color=gc(n.track||0); });
-    state.allNotes=notes; buildVoiceBar(notes,names); buildOctChips();
+    state.allNotes=notes; buildVoiceBar(notes,names); buildOctSel();
     state.notes=notes; state.duration=duration; state.midiLoaded=true;
     let mn=127,mx=0; notes.forEach(n=>{if(n.midi<mn)mn=n.midi;if(n.midi>mx)mx=n.midi;});
     state.lowestNote=Math.max(21,mn-2); state.highestNote=Math.min(108,mx+2);
@@ -1400,25 +1564,12 @@ async function applyNotes(notes, duration, names){
 // ======================== SELETOR DE VOZES ========================
 // state.allNotes = todas as vozes do arquivo; state.notes = só as vozes escolhidas (o que aparece e toca).
 function buildVoiceBar(notes,names){
-    const bar=document.getElementById('voiceBar'), box=document.getElementById('voiceChips');
+    const bar=document.getElementById('voiceBar');
     const tracks=[...new Set(notes.map(n=>n.track||0))].sort((a,b)=>a-b);
     state.voiceList=tracks.map(t=>{ const n=notes.find(x=>(x.track||0)===t); return {track:t,name:(names&&names[t])||('Faixa '+(t+1)),color:n.color||gc(t)}; });
-    state.voiceSel=new Set(tracks); box.innerHTML='';
+    state.voiceSel=new Set(tracks);
     if(tracks.length<2){ bar.hidden=true; return; }
-    const mk=(label,color,cls,fn,title)=>{
-        const b=document.createElement('button'); b.type='button'; b.className='voice-chip '+cls; b.title=title||'';
-        const d=document.createElement('span'); d.className='dot'; b.appendChild(d); b.appendChild(document.createTextNode(label));
-        if(color) b.style.setProperty('--vc',color);
-        b.addEventListener('click',fn); box.appendChild(b); return b;
-    };
-    mk('Todas','','all',()=>setVoiceSel(tracks),'Tocar todas as vozes');
-    state.voiceList.forEach(v=>mk(v.name,v.color,'v'+v.track,()=>toggleVoice(v.track),'Tocar só '+v.name+' (toque em outra para somar)'));
     bar.hidden=false; refreshVoiceBar();
-}
-function toggleVoice(t){
-    const all=state.voiceList.map(v=>v.track), sel=new Set(state.voiceSel);
-    if(sel.size===all.length) setVoiceSel([t]);                 // estava tudo ligado → só esta voz
-    else { sel.has(t)?sel.delete(t):sel.add(t); setVoiceSel(sel.size?[...sel]:all); }   // senão liga/desliga; vazio = todas
 }
 function setVoiceSel(list){
     state.voiceSel=new Set(list);
@@ -1428,13 +1579,17 @@ function setVoiceSel(list){
     if(state.isPlaying){ const cp=state.currentTime; pausePlayback(); state.pausedAt=cp; startPlayback(); }
     else { drawScene(); }
 }
+// menu "Voz": lista com uma bolinha por opção (Todas as vozes / Soprano / Contralto / Tenor (+1 oitava) / Baixo)
 function refreshVoiceBar(){
+    const sel=document.getElementById('voiceSelect'); if(!sel) return;
     const all=state.voiceList.length, allOn=state.voiceSel.size===all;
-    document.querySelectorAll('#voiceChips .voice-chip').forEach(b=>{
-        if(b.classList.contains('all')) b.classList.toggle('on',allOn);
-        else { const t=+[...b.classList].find(c=>/^v\d+$/.test(c)).slice(1); b.classList.toggle('on',!allOn&&state.voiceSel.has(t)); }
-    });
+    let h='<option value="all">Todas as vozes</option>';
+    state.voiceList.forEach(v=>{ h+='<option value="'+v.track+'">'+v.name+(state.octUp&&state.octUp[v.track]?' (+1 oitava)':'')+'</option>'; });
+    sel.innerHTML=h; sel.value=allOn?'all':String([...state.voiceSel][0]);
 }
+document.getElementById('voiceSelect').addEventListener('change',e=>{
+    const v=e.target.value; setVoiceSel(v==='all'?state.voiceList.map(x=>x.track):[parseInt(v)]);
+});
 
 function buildPianoKeys(){
     state.pianoKeys=[];
@@ -1465,7 +1620,7 @@ async function startPlayback(){
 
     // Schedule all notes relative to Transport start
     state.notes.forEach(note=>{
-        if(note.startTime<offset) return;
+        if(note.startTime<offset||note.startTime>=proLimit()) return;
         const tStart=(note.startTime-offset)/spd;
         const dur=Math.max(0.05, note.duration/spd);
         Tone.Transport.schedule(time=>{
@@ -1513,6 +1668,7 @@ function resetPlayback(){
 }
 
 function seekTo(newTime){
+    if(newTime>=proLimit()){ newTime=0; proPaywall('seek'); }
     const wasPlaying=state.isPlaying;
     if(wasPlaying){ state.isPlaying=false; clearAudio(); if(state.animFrameId) cancelAnimationFrame(state.animFrameId); }
     state.pausedAt=Math.max(0,Math.min(state.duration,newTime));
@@ -1527,15 +1683,17 @@ function animate(){
     // Transport.seconds = time elapsed since Transport.start(), not scaled by speed
     state.currentTime = state.pausedAt + Tone.Transport.seconds * state.speed;
     if(state.currentTime>=state.duration){ stopPlayback(); return; }
+    if(state.currentTime>=proLimit()){ stopPlayback(); proPaywall('fim'); return; }
     updateUI(); drawScene();
     state.animFrameId=requestAnimationFrame(animate);
 }
 
 function updateUI(){
-    const p=state.duration>0?(state.currentTime/state.duration)*100:0;
+    const D=Math.min(state.duration,proLimit());
+    const p=D>0?(state.currentTime/D)*100:0;
     progressFill.style.width=Math.min(100,Math.max(0,p))+'%';
     currentTimeEl.textContent=fmt(state.currentTime);
-    totalTimeEl.textContent=fmt(state.duration);
+    totalTimeEl.textContent=fmt(D)+(D<state.duration?' 🔒':'');
 }
 
 // ======================== DRAWING ========================
