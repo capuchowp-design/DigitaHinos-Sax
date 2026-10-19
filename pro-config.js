@@ -1,7 +1,7 @@
 // ===== CONFIGURAÇÃO DO MODO PRO — edite só este arquivo =====
 window.PRO_CFG = {
   app: 'sax',                                   // nome do app (aparece na planilha)
-  scriptUrl: 'COLE_AQUI_A_URL_DO_APPS_SCRIPT',  // termina em /exec (veja GUIA_PRO.md)
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbxaRx4dRSxyHpMG89JDImdtlBS-8MCpIv01vyBbO95h3CHOPcWzDM87GUqWz7evJLL40A/exec',// termina em /exec (veja GUIA_PRO.md)
   pixKey: 'meuidwp@duck.com',// CPF/CNPJ (só números), e-mail, telefone (+5511999999999) ou chave aleatória
   pixName: 'WESLEY PHILIP A CAPUCHO',// nome do recebedor (até 25 letras, sem acento)
   pixCity: 'SAO SEBASTIAO',// cidade (até 15 letras, sem acento)
