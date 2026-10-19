@@ -9,7 +9,13 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192x192.png">
     <meta name="theme-color" content="#fcad2a">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <div class="hino-modal" id="mHinos" hidden>
+  <div class="hino-sheet">
+    <div class="hino-head"><h2>Hinos</h2><button class="hino-x" id="hinoClose" aria-label="Fechar">✕</button></div>
+    <div class="hino-body"><input type="search" id="hinoQ" placeholder="Buscar por número ou título…" autocomplete="off"><div id="hinoList"></div></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         @import url('https://cdn.jsdelivr.net/fontsource/fonts/inter@5/latin.css');
 
@@ -380,6 +386,19 @@
         .voice-chip.on .dot { opacity:1; box-shadow:0 0 6px var(--vc,#fcad2a); }
         .voice-chip.all.on { --vc:#fcad2a; }
         @media(max-width:480px){ .voice-bar{padding:5px 8px;gap:5px;} .voice-bar .vb-label{display:none;} .voice-chip{padding:6px 10px;font-size:11px;} }
+.hino-modal { position:fixed; inset:0; background:rgba(0,0,0,.62); z-index:300; display:flex; align-items:center; justify-content:center; padding:14px; }
+        .hino-modal[hidden] { display:none; }
+        .hino-sheet { background:var(--bg-panel); border:1px solid var(--border-main); border-radius:14px; width:min(640px,100%); max-height:88vh; display:flex; flex-direction:column; color:var(--text-main); box-shadow:0 18px 60px rgba(0,0,0,.5); }
+        .hino-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border-main); }
+        .hino-head h2 { margin:0; font-size:17px; }
+        .hino-x { background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer; }
+        .hino-body { overflow:auto; padding:12px 14px; }
+        #hinoQ { width:100%; box-sizing:border-box; padding:10px 12px; border-radius:10px; border:1px solid var(--border-main); background:var(--bg-btn); color:var(--text-main); font:600 14px Inter,sans-serif; margin-bottom:10px; }
+        .hino-item { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:10px 12px; margin:0 0 6px; background:var(--bg-btn); color:var(--text-main); border:1px solid var(--border-btn); border-radius:10px; cursor:pointer; font:500 14px Inter,sans-serif; }
+        .hino-item:hover { border-color:#fcad2a; }
+        .hino-item b { min-width:42px; color:#fcad2a; font-weight:800; }
+        .voice-chip.oct { padding:6px 10px; }
+        .voice-chip.oct.on { --vc:#fcad2a; }
 </style>
 </head>
 <body>
@@ -402,6 +421,7 @@
         </button>
         <div class="synth-badge" id="synthBadge"><span class="dot"></span>Carregando…</div>
         <span class="file-name" id="fileName"></span>
+        <button class="tab-btn" id="hinosBtn" title="Biblioteca de hinos">📖 <span>Hinos</span></button>
         <button class="theme-btn" id="themeBtn" title="Alternar modo claro/escuro">🌙</button>
         <label class="file-label">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -429,6 +449,7 @@
                     <label class="welcome-upload" for="welcomeFileInput">Carregar MIDI / MXL
                         <input type="file" id="welcomeFileInput" accept=".mid,.midi,.mxl,.xml,.musicxml" style="display:none">
                     </label>
+                    <button class="welcome-compose" onclick="openHinos()">📖 Hinos</button>
                     <button class="welcome-compose" onclick="switchView('score')">✏ Compor</button>
                 </div>
                 <div class="support-btns" style="margin-top:12px;">
@@ -473,6 +494,8 @@
     <div class="voice-bar" id="voiceBar" hidden>
         <span class="vb-label">Vozes:</span>
         <div id="voiceChips" style="display:contents"></div>
+        <span class="vb-label" id="octLabel" style="margin-left:10px" hidden>Oitava acima:</span>
+        <div id="octChips" style="display:contents"></div>
     </div>
     <div class="controls-bar">
         <div class="transport-group">
@@ -1120,7 +1143,7 @@ const state={
     isPlaying:false, speed:1, volume:0.7,
     pianoKeys:[], lowestNote:21, highestNote:108,
     totalNotes:0, animFrameId:null,
-    pausedAt:0, allNotes:[], voiceList:[], voiceSel:new Set(),
+    pausedAt:0, allNotes:[], voiceList:[], voiceSel:new Set(), octUp:{},
     sampler:null, samplerReady:false, piano:null, synth:null,
     midiLoaded:false,
     pps:200  // pixels per second
@@ -1273,27 +1296,94 @@ function resizeCanvases(){
 window.addEventListener('resize',()=>{ resizeCanvases(); if(state.midiLoaded) drawScene(); });
 
 // ======================== MIDI LOADING ========================
+async function loadBuffer(buf,name){
+    loadingOverlay.classList.add('active');
+    fileNameEl.textContent=name;
+    try {
+        const parsed=await parseScoreFile(buf);
+        if(!parsed.notes.length) throw new Error('Nenhuma nota encontrada');
+        applyNotes(parsed.notes, parsed.duration, parsed.names);
+        toast(`Carregado! ${state.totalNotes} notas`, 'success');
+    } catch(err){ toast('Erro: '+err.message); state.midiLoaded=false; }
+    loadingOverlay.classList.remove('active');
+}
 function loadMidiFile(file){
     if(!file) return;
-    loadingOverlay.classList.add('active');
-    fileNameEl.textContent=file.name;
     const reader=new FileReader();
-    reader.onload=async e=>{
-        try {
-            const parsed=await parseScoreFile(e.target.result);
-            if(!parsed.notes.length) throw new Error('Nenhuma nota encontrada');
-            applyNotes(parsed.notes, parsed.duration, parsed.names);
-            toast(`Carregado! ${state.totalNotes} notas`, 'success');
-        } catch(err){ toast('Erro: '+err.message); state.midiLoaded=false; }
-        loadingOverlay.classList.remove('active');
-    };
+    reader.onload=e=>loadBuffer(e.target.result,file.name);
     reader.onerror=()=>{ loadingOverlay.classList.remove('active'); toast('Erro ao ler arquivo'); };
     reader.readAsArrayBuffer(file);
 }
 
+// ---- biblioteca de hinos (pasta hinos/ com index.json) ----
+let HINOS=null;
+const normTxt=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function renderHinos(){
+    const q=normTxt(document.getElementById('hinoQ').value).trim(), box=document.getElementById('hinoList');
+    box.innerHTML='';
+    if(!HINOS){ box.textContent=location.protocol==='file:'?'A biblioteca precisa de um endereço http. Abra o app pelo GitHub Pages ou rode um servidor local (python3 -m http.server) na pasta do projeto e acesse http://localhost:8000.':'Não foi possível carregar a lista de hinos.'; return; }
+    const list=HINOS.filter(h=>!q||String(h.n).padStart(3,'0').includes(q.replace(/^0+(?=\d)/,''))||String(h.n)===q||normTxt(h.t).includes(q));
+    if(!list.length){ box.textContent='Nenhum hino encontrado.'; return; }
+    const fr=document.createDocumentFragment();
+    list.forEach(h=>{ const b=document.createElement('button'); b.className='hino-item'; b.innerHTML='<b>'+String(h.n).padStart(3,'0')+'</b><span></span>'; b.lastChild.textContent=h.t; b.onclick=()=>openHino(h); fr.appendChild(b); });
+    box.appendChild(fr);
+}
+function closeHinos(){ document.getElementById('mHinos').hidden=true; }
+async function openHinos(){
+    document.getElementById('mHinos').hidden=false;
+    if(!HINOS){ try{ HINOS=await (await fetch('hinos/index.json')).json(); }catch(e){ HINOS=null; } }
+    renderHinos(); document.getElementById('hinoQ').focus();
+}
+async function openHino(h){
+    closeHinos(); loadingOverlay.classList.add('active');
+    try{
+        const r=await fetch('hinos/'+h.f); if(!r.ok) throw new Error('arquivo não encontrado');
+        switchView('player');
+        await loadBuffer(await r.arrayBuffer(),String(h.n).padStart(3,'0')+' – '+h.t);
+    }catch(e){ loadingOverlay.classList.remove('active'); toast('Erro: '+e.message); }
+}
+document.getElementById('hinosBtn').addEventListener('click',openHinos);
+document.getElementById('hinoClose').addEventListener('click',closeHinos);
+document.getElementById('mHinos').addEventListener('click',e=>{ if(e.target.id==='mHinos') closeHinos(); });
+document.getElementById('hinoQ').addEventListener('input',renderHinos);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeHinos(); });
+
+// ---- oitava acima por voz (soprano e tenor): a voz inteira sobe 8ª, sem dobrar nota por nota ----
+function octStore(){ try{ return JSON.parse(localStorage.getItem('saxOct')||'{}'); }catch(e){ return {}; } }
+function octApply(){
+    state.allNotes.forEach(n=>{ if(n.m0===undefined) n.m0=n.midi; n.midi=n.m0+(state.octUp[n.track||0]?12:0); });
+}
+function octRange(){
+    let mn=127,mx=0; state.allNotes.forEach(n=>{ if(n.midi<mn) mn=n.midi; if(n.midi>mx) mx=n.midi; });
+    state.lowestNote=Math.max(21,mn-2); state.highestNote=Math.min(108,mx+2);
+    while(state.highestNote-state.lowestNote<23){ if(state.lowestNote>21) state.lowestNote--; if(state.highestNote<108) state.highestNote++; }
+}
+function buildOctChips(){
+    const box=document.getElementById('octChips'), lab=document.getElementById('octLabel'), st=octStore();
+    box.innerHTML=''; state.octUp={};
+    const vs=state.voiceList.filter(v=>/^(soprano|tenor)$/i.test(v.name));
+    vs.forEach(v=>{ state.octUp[v.track]=!!st[String(v.name).toLowerCase()]; });
+    octApply();
+    vs.forEach(v=>{
+        const b=document.createElement('button'); b.type='button'; b.className='voice-chip oct'; b.dataset.t=v.track;
+        b.title=v.name+' uma oitava acima (a voz inteira)'; b.style.setProperty('--vc',v.color);
+        b.textContent=v.name+' ↑8ª'; b.classList.toggle('on',!!state.octUp[v.track]);
+        b.addEventListener('click',()=>toggleOct(v));
+        box.appendChild(b);
+    });
+    lab.hidden=!vs.length;
+}
+function toggleOct(v){
+    state.octUp[v.track]=!state.octUp[v.track];
+    const st=octStore(); st[String(v.name).toLowerCase()]=state.octUp[v.track]; try{ localStorage.setItem('saxOct',JSON.stringify(st)); }catch(e){}
+    octApply(); octRange(); buildPianoKeys();
+    document.querySelectorAll('#octChips .voice-chip').forEach(b=>b.classList.toggle('on',!!state.octUp[+b.dataset.t]));
+    if(state.isPlaying){ const cp=state.currentTime; pausePlayback(); state.pausedAt=cp; startPlayback(); } else drawScene();
+}
+
 async function applyNotes(notes, duration, names){
     notes.forEach(n=>{ n.color=gc(n.track||0); });
-    state.allNotes=notes; buildVoiceBar(notes,names);
+    state.allNotes=notes; buildVoiceBar(notes,names); buildOctChips();
     state.notes=notes; state.duration=duration; state.midiLoaded=true;
     let mn=127,mx=0; notes.forEach(n=>{if(n.midi<mn)mn=n.midi;if(n.midi>mx)mx=n.midi;});
     state.lowestNote=Math.max(21,mn-2); state.highestNote=Math.min(108,mx+2);
