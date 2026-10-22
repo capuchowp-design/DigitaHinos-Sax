@@ -344,7 +344,8 @@
         @media(min-width:1200px){
             .app-header{padding:8px 22px;} .piano-container{height:clamp(190px,34vh,300px);} .controls-bar{padding:8px 22px;}
         }
-    .sax-only .canvas-container{flex:0 0 0!important;height:0!important;min-height:0!important;overflow:hidden}
+    .sax-only .canvas-container{flex:0 0 auto!important;height:auto!important;min-height:0!important;overflow:visible}
+.sax-only #mainCanvas{display:none}
 .sax-only .piano-container{flex:1 1 auto!important;height:auto!important;min-height:0;border-top:none}
         .pb-name { font-size:12px; font-weight:600; color:var(--text-main); background:var(--bg-btn); border:1px solid var(--border-btn); border-radius:14px; padding:4px 11px; cursor:pointer; max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .pb-name:hover { background:var(--bg-btn-hover); }
@@ -551,6 +552,7 @@
                 <option value="2">2x</option>
             </select>
         </div>
+        <button class="score-action-btn secondary" id="pbPlayerScore" title="Ver e baixar a partitura deste hino (Pro)">🎼 Partitura</button>
         <div class="volume-control">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
             <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
@@ -735,6 +737,7 @@
     <div class="pb-head"><h2>Partitura</h2><button class="pb-x" data-close>✕</button></div>
     <div class="pb-opts">
       <label>Título <input type="text" id="scTitle" maxlength="60" placeholder="Título da música"></label>
+      <label>Voz <select id="scVoice" aria-label="Voz da partitura"></select></label>
       <button class="score-action-btn primary" id="scPdf" style="margin-left:auto">⬇ Baixar PDF</button>
     </div>
     <div class="pb-body" id="scBody" style="padding:14px 10px"></div>
@@ -1154,7 +1157,10 @@ async function parseMusicXmlFile(buf){
     const beatSecs=[], barSecs=[];
     bars.filter(b=>b.len>1e-6).forEach(b=>{ barSecs.push(secOf(b.q)); for(let k=0;k<Math.ceil(b.len-1e-6);k++) beatSecs.push(secOf(b.q+k)); });
     if(bars.length){ const lb=bars[bars.length-1]; beatSecs.push(secOf(lb.q+lb.len)); }
-    return {notes,duration:Math.max(...notes.map(n=>n.endTime)),bpm:segs[0].bpm,names:nmap,voiceCount:lines.length,beats:beatSecs,bars:barSecs};
+    const _fx=doc.getElementsByTagName('fifths')[0], _tm=doc.getElementsByTagName('time')[0];
+    const _bt=_tm&&_tm.getElementsByTagName('beats')[0], _bty=_tm&&_tm.getElementsByTagName('beat-type')[0];
+    return {notes,duration:Math.max(...notes.map(n=>n.endTime)),bpm:segs[0].bpm,names:nmap,voiceCount:lines.length,beats:beatSecs,bars:barSecs,
+        key:_fx?parseInt(_fx.textContent):null,timeSig:(_bt&&_bty)?(_bt.textContent.trim()+'/'+_bty.textContent.trim()):null};
 }
 
 // Abre qualquer formato suportado (MIDI, MusicXML, MXL) pelo conteúdo do arquivo.
@@ -1422,14 +1428,14 @@ async function proRender(){
     const price=PRO_CFG.price>0?'R$ '+Number(PRO_CFG.price).toFixed(2).replace('.',','):'';
     if(PRO.ok){
         const dev=PRO.dev?PRO.dev.slice(0,10)+'…':'';
-        box.innerHTML='<div class="pro-ok">✓ Pro ativo neste aparelho</div><p class="pro-p">Todos os 480 hinos estão liberados, completos e com qualquer voz.</p><p class="pro-p pro-small">Código: <b></b><br>Aparelho: '+dev+'<br>O acesso continua mesmo se você desinstalar o app ou limpar os dados (basta digitar o mesmo código neste aparelho, ou ele é restaurado sozinho no app instalado). O código não funciona em outro aparelho.</p>';
+        box.innerHTML='<div class="pro-ok">✓ Pro ativo neste aparelho</div><p class="pro-p">Todos os 480 hinos estão liberados, completos e com qualquer voz, e a partitura pode ser baixada em PDF.</p><p class="pro-p pro-small">Código: <b></b><br>Aparelho: '+dev+'<br>O acesso continua mesmo se você desinstalar o app ou limpar os dados (basta digitar o mesmo código neste aparelho, ou ele é restaurado sozinho no app instalado). O código não funciona em outro aparelho.</p>';
         box.querySelector('b').textContent=PRO.code; return;
     }
-    const msgTop=proReason==='fim'?'Fim da prévia de '+PRO_CFG.previewSec+' segundos.':proReason==='seek'?'A prévia grátis toca só os primeiros '+PRO_CFG.previewSec+' segundos.':'';
+    const msgTop=proReason==='pdf'?'Baixar a partitura em PDF (todas as vozes ou só uma) é um recurso Pro.':proReason==='fim'?'Fim da prévia de '+PRO_CFG.previewSec+' segundos.':proReason==='seek'?'A prévia grátis toca só os primeiros '+PRO_CFG.previewSec+' segundos.':'';
     const configured=/^https?:/.test(PRO_CFG.scriptUrl)&&PRO_CFG.pixKey&&PRO_CFG.pixKey!=='SUA_CHAVE_PIX';
     let dev=''; try{ dev=await proDevice(); }catch(e){}
     box.innerHTML=(msgTop?'<div class="pro-top">'+msgTop+'</div>':'')+
-      '<p class="pro-p"><b>Grátis:</b> hinos 1 a '+PRO_CFG.freeHinos+' completos e '+PRO_CFG.previewSec+' s de prévia nos demais (todas as vozes).<br><b>Pro:</b> todos os hinos completos, com qualquer voz. Pagamento único via Pix'+(price?' · <b>'+price+'</b>':'')+'.</p>'+
+      '<p class="pro-p"><b>Grátis:</b> hinos 1 a '+PRO_CFG.freeHinos+' completos e '+PRO_CFG.previewSec+' s de prévia nos demais (todas as vozes).<br><b>Pro:</b> todos os hinos completos, com qualquer voz, e download da partitura em PDF (todas as vozes ou só a que você escolher). Pagamento único via Pix'+(price?' · <b>'+price+'</b>':'')+'.</p>'+
       (configured?'':'<p class="pro-p pro-warn">Atenção: o dono do app ainda não preencheu o arquivo pro-config.js (chave Pix e endereço do script).</p>')+
       '<div class="pro-step"><span>1</span><div><b>Pague via Pix</b><div class="pro-row"><button class="pro-btn" id="proCopyPix">Copiar Pix copia e cola</button><button class="pro-btn sec" id="proCopyKey">Copiar chave</button></div><div class="pro-small" id="proKeyTxt"></div></div></div>'+
       '<div class="pro-step"><span>2</span><div><b>Envie o comprovante</b><div class="pro-row"><a class="pro-btn" id="proWa" target="_blank" rel="noopener">Enviar no WhatsApp</a></div><div class="pro-small">Você recebe um código de uso único.</div></div></div>'+
@@ -1456,7 +1462,7 @@ async function loadBuffer(buf,name){
     try {
         const parsed=await parseScoreFile(buf);
         if(!parsed.notes.length) throw new Error('Nenhuma nota encontrada');
-        applyNotes(parsed.notes, parsed.duration, parsed.names);
+        sxSetMeta(parsed); applyNotes(parsed.notes, parsed.duration, parsed.names);
         toast(`Carregado! ${state.totalNotes} notas`, 'success');
     } catch(err){ toast('Erro: '+err.message); state.midiLoaded=false; }
     loadingOverlay.classList.remove('active');
@@ -1706,6 +1712,7 @@ function drawScene(){
     if(isLight()){ bg.addColorStop(0,'#f9f4ee'); bg.addColorStop(1,'#f6ecdf'); }
     else { bg.addColorStop(0,'#1a130a'); bg.addColorStop(1,'#2b1e0e'); }
     mainCtx.fillStyle=bg; mainCtx.fillRect(0,0,w,h);
+    try{ liveScoreUpdate(); }catch(e){ console.error(e); }
     if(!state.midiLoaded) return;
     const pps=state.pps, hl=h-2;
     const active=new Map();
@@ -1933,21 +1940,7 @@ function drawPiano(){
     // hastes (varetas) das chaves, ao longo do corpo
     c.strokeStyle=light?'rgba(90,70,20,.55)':'rgba(20,14,4,.6)'; c.lineWidth=3;
     [[-34,290,745],[36,300,740]].forEach(([dx,ya,yb])=>{ const [xa,wa]=saxBodyAt(ya),[xb,wb]=saxBodyAt(yb); c.beginPath(); c.moveTo(xa+dx*Math.max(.62,Math.min(1.08,wa/58)),ya); c.lineTo(xb+dx*Math.max(.62,Math.min(1.08,wb/58)),yb); c.stroke(); });
-    // ---- pauta com a nota escrita + nome (com "pulo" quando a nota muda)
-    const sp=11, pad=30, Y=q=>pad+7.5*sp-q*sp/2, sx0=20, sx1=230, nx=125;
-    const pop=Math.max(0,1-(now-saxA.noteT)/260), popS=1+0.7*pop*pop; if(pop>0) busy=true;
-    c.strokeStyle=ink; c.lineWidth=1.5; c.globalAlpha=0.8;
-    for(let q=0;q<=8;q+=2){ c.beginPath(); c.moveTo(sx0,Y(q)); c.lineTo(sx1,Y(q)); c.stroke(); }
-    c.globalAlpha=1; c.fillStyle=top?'#fff':ink; c.font='700 56px Inter,sans-serif'; c.textAlign='left';
-    if(top){
-        const pc=pw%12, q0=((Math.floor(pw/12)-1)*7+LET[pc])-30, yy=Y(q0);
-        c.strokeStyle=ink; for(let q=-2;q>=q0;q-=2){ c.beginPath(); c.moveTo(nx-16,Y(q)); c.lineTo(nx+16,Y(q)); c.stroke(); }
-        for(let q=10;q<=q0;q+=2){ c.beginPath(); c.moveTo(nx-16,Y(q)); c.lineTo(nx+16,Y(q)); c.stroke(); }
-        c.save(); c.translate(nx,yy); c.scale(popS,popS);
-        c.shadowColor=ac; c.shadowBlur=16+14*pop; c.fillStyle=ac; c.beginPath(); c.ellipse(0,0,8.5,6,-0.3,0,Math.PI*2); c.fill(); c.shadowBlur=0;
-        c.font='26px sans-serif'; c.fillStyle=ac; c.fillText(ACC[pc],-34,9); c.restore();
-        c.save(); c.translate(20,205); c.scale(1+0.18*pop,1+0.18*pop); c.font='700 56px Inter,sans-serif'; c.fillStyle='#fff'; c.shadowColor=ac; c.shadowBlur=12*pop; c.fillText(SOL[pc],0,0); c.restore();
-    } else c.fillText('♪',20,205);
+    const pop=Math.max(0,1-(now-saxA.noteT)/260); if(pop>0) busy=true;   // "pulo" quando a nota muda
     // ---- digitação por cima do corpo: esquerda = vermelho, direita = verde (as apertadas por último)
     const keys=SAXK.slice().sort((a,b)=>(saxA.ka[a[0]]||0)-(saxA.ka[b[0]]||0)), ripNew=[];
     keys.forEach(([id,hand,dx,y,rx,ry,rot])=>{
@@ -2025,7 +2018,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     const sel=document.createElement('select'); sel.id='saxType'; sel.setAttribute('aria-label','Tipo de saxofone');
     sel.style.cssText='position:absolute;top:8px;right:8px;z-index:5;background:rgba(20,10,5,.7);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:6px 8px;font:600 13px Inter,sans-serif;max-width:55%';
     Object.entries(SAXTYPES).forEach(([k,v])=>{ const o=document.createElement('option'); o.value=k; o.textContent=v.n; if(k===saxType) o.selected=true; sel.appendChild(o); });
-    sel.addEventListener('change',()=>{ saxType=sel.value; try{localStorage.setItem('saxType',saxType);}catch(e){} drawPiano(); });
+    sel.addEventListener('change',()=>{ saxType=sel.value; try{localStorage.setItem('saxType',saxType);}catch(e){} drawPiano(); if(state.midiLoaded) drawScene(); });
     box.appendChild(sel);
 });
 
@@ -3017,6 +3010,7 @@ async function playScore(){
     if(!scoreNotes.length){ toast('Adicione notas primeiro'); return; }
     const notes=scoreToPlayerNotes();
     const vn={}; voices.forEach(v=>{ vn[v.id]=v.name; });
+    sxSetMeta({bpm:parseInt(document.getElementById('scoreBpm').value)||120,timeSig:document.getElementById('scoreTimeSig').value});
     await applyNotes(notes,Math.max(...notes.map(n=>n.endTime))+0.5,vn);
     fileNameEl.textContent='Partitura';
     switchView('player');
@@ -3168,8 +3162,139 @@ window.addEventListener('appinstalled', () => {
 </script>
 <script>
 /* ============================================================================
+   PARTITURA DO HINO ABERTO NO PLAYER (PDF) + PARTITURA AO VIVO NA TELA INICIAL
+   A partitura é escrita na altura do sax escolhido (o motor soma a transposição), como o saxofonista lê.
+   ========================================================================== */
+function sxSetMeta(p){ state.srcBpm=p&&p.bpm; state.srcTs=p&&p.timeSig; state.srcKey=p&&p.key; state.srcBeats=p&&p.beats; state.srcBars=p&&p.bars; }
+const playerTs=()=>(state.srcTs&&PB_MEASURE[state.srcTs])?state.srcTs:'4/4';
+function sxBeatPos(t){
+    const B=state.srcBeats;
+    if(B&&B.length>1){
+        if(t<=B[0]) return (t-B[0])/Math.max(1e-6,B[1]-B[0]);
+        const n=B.length-1; if(t>=B[n]) return n+(t-B[n])/Math.max(1e-6,B[n]-B[n-1]);
+        let a=0,b=n; while(b-a>1){ const c=(a+b)>>1; if(B[c]<=t) a=c; else b=c; }
+        return a+(t-B[a])/Math.max(1e-6,B[b]-B[a]);
+    }
+    return t/(60/Math.max(20,Math.min(300,state.srcBpm||120)));
+}
+// compasso de anacruse (incompleto): empurra tudo para o compasso fechar certinho
+function sxPickup(){
+    const [a,b]=playerTs().split('/').map(Number), full=a*4/b, bars=state.srcBars;
+    if(bars&&bars.length>1){ const l0=sxBeatPos(bars[1])-sxBeatPos(bars[0]); if(l0>0.01&&l0<full-0.01) return full-l0; }
+    return 0;
+}
+// armadura escrita = armadura do arquivo + deslocamento da transposição (prefere ≤6 acidentes)
+function sxKey(){
+    const f=state.srcKey; if(f==null||isNaN(f)) return {n:0,flat:false};
+    const t=(SAXTYPES[saxType]||{t:0}).t, sh0=((7*t)%12+12)%12, sh=sh0>6?sh0-12:sh0;
+    let k=Number(f)+sh; while(k>6) k-=12; while(k<-6) k+=12;
+    return {n:Math.abs(k),flat:k<0};
+}
+// notas (formato do motor, altura real) a partir das notas do arquivo; src = state.notes (vozes tocando) ou state.allNotes
+function playerScoreNotes(src){
+    src=src||state.notes;
+    const q=.25, p0=state.srcBars&&state.srcBars.length?sxBeatPos(state.srcBars[0]):0, pk=sxPickup(), ids=state.voiceList.map(v=>v.track);
+    return src.map(n=>{
+        const a=sxBeatPos(n.startTime)-p0+pk, b=sxBeatPos(n.endTime)-p0+pk;
+        const beat=1+Math.max(0,Math.round(a/q))*q, end=1+Math.max(0,Math.round(b/q))*q;
+        return {midi:Math.max(21,Math.min(108,n.midi)), beat, duration:Math.max(q,end-beat),
+            velocity:90, voice:Math.max(0,ids.indexOf(n.track||0)), accidental:0,dotted:false,dotted2:false,tied:false,articulations:[],t0:n.startTime,t1:n.endTime};
+    });
+}
+function withPlayerSource(fn,src){
+    const bakN=scoreNotes, bpmEl=document.getElementById('scoreBpm'), bakB=bpmEl.value, bakK=KEY;
+    try{
+        scoreNotes=playerScoreNotes(src); bpmEl.value=Math.max(20,Math.min(300,Math.round(state.srcBpm||120)));
+        KEY=sxKey(); KSIG=keySigArr();
+        return fn();
+    } finally { scoreNotes=bakN; bpmEl.value=bakB; KEY=bakK; KSIG=keySigArr(); }
+}
+const LIVE={sig:'',notesRef:null,svgs:[],lay:[],heads:[],map:[],act:[],host:null,paper:null,shown:null,sys:-1,ok:false};
+const LIVE_COL='#e8590c';
+function liveHost(){
+    if(LIVE.host) return LIVE.host;
+    const h=document.createElement('div'); h.id='liveScore';
+    h.style.cssText='position:relative;display:none;align-items:center;justify-content:center;padding:8px 8px 6px;z-index:2;pointer-events:none';
+    const paper=document.createElement('div');
+    paper.style.cssText='background:#fff;border-radius:12px;box-shadow:0 6px 28px rgba(0,0,0,.45);overflow:hidden;width:100%;max-width:980px;max-height:36vh;display:flex;align-items:center;justify-content:center;padding:4px 6px';
+    h.append(paper); canvasContainer.append(h); LIVE.host=h; LIVE.paper=paper;
+    try{   // quando a altura da partitura muda, o instrumento é redimensionado (evita animação cortada/esticada)
+        let raf=0, lastH=-1;
+        const ro=new ResizeObserver(()=>{ const hh=Math.round(canvasContainer.getBoundingClientRect().height); if(hh===lastH) return; lastH=hh;
+            cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ resizeCanvases(); if(state.midiLoaded) drawScene(); }); });
+        ro.observe(canvasContainer); ro.observe(pianoCanvas.parentElement);
+    }catch(e){}
+    return h;
+}
+function liveBuild(){
+    LIVE.svgs=[]; LIVE.lay=[]; LIVE.heads=[]; LIVE.map=[]; LIVE.act=[]; LIVE.shown=null; LIVE.sys=-1; LIVE.ok=false;
+    try{
+        const sd=withPlayerSource(()=>pbBuildScore({title:'',voice:'all',ts:playerTs()}),state.notes);
+        LIVE.svgs=sd.svgs; LIVE.lay=sd.lay; LIVE.heads=sd.heads; LIVE.W=sd.W;
+        const q=playerScoreNotes(state.notes), pr=[]; q.forEach(n=>{ pr.push([n.t0,(n.beat-1)*8],[n.t1,(n.beat-1+n.duration)*8]); });
+        pr.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+        let mu=-1; const m=[]; pr.forEach(([t,u])=>{ u=Math.max(u,mu); mu=u; if(m.length&&m[m.length-1][0]===t) m[m.length-1][1]=u; else m.push([t,u]); });
+        LIVE.map=m; LIVE.ok=sd.svgs.length>0&&sd.lay.length>0;
+        LIVE.svgs.forEach(svg=>{
+            svg.removeAttribute('width'); svg.removeAttribute('height');
+            svg.style.cssText='display:block;width:100%;height:auto;max-height:calc(36vh - 8px)';
+            const ln=document.createElementNS(PB_NS,'line'); ln.setAttribute('stroke',LIVE_COL); ln.setAttribute('stroke-width','2.4'); ln.setAttribute('opacity','.75'); ln.setAttribute('stroke-linecap','round'); ln.style.display='none'; svg.append(ln); svg._cur=ln;
+        });
+    }catch(e){ console.error(e); LIVE.ok=false; }
+}
+function liveU(t){
+    const m=LIVE.map; if(!m.length) return 0;
+    if(t<=m[0][0]) return m[0][1]; if(t>=m[m.length-1][0]) return m[m.length-1][1];
+    let a=0,b=m.length-1; while(b-a>1){ const c=(a+b)>>1; if(m[c][0]<=t) a=c; else b=c; }
+    const f=(t-m[a][0])/Math.max(1e-6,m[b][0]-m[a][0]); return m[a][1]+(m[b][1]-m[a][1])*f;
+}
+function liveScoreUpdate(){
+    const host=liveHost();
+    if(!state.midiLoaded||!state.notes.length){ host.style.display='none'; return; }
+    const sig=[[...state.voiceSel].join(','),JSON.stringify(state.octUp),saxType,state.srcKey,state.srcTs,state.srcBpm].join('|');
+    if(LIVE.notesRef!==state.notes||LIVE.sig!==sig){ LIVE.notesRef=state.notes; LIVE.sig=sig; liveBuild(); }
+    if(!LIVE.ok){ host.style.display='none'; return; }
+    host.style.display='flex';
+    const u=liveU(state.currentTime), lay=LIVE.lay;
+    let si=lay.findIndex(L=>u<L.u1-1e-6); if(si<0) si=lay.length-1;
+    const L=lay[si], svg=LIVE.svgs[L.page];
+    if(LIVE.shown!==svg){ LIVE.paper.textContent=''; LIVE.paper.append(svg); LIVE.shown=svg; LIVE.sys=-1; }
+    if(LIVE.sys!==si){ LIVE.sys=si; const top=L.y0-12, bot=L.y0+L.h-6; svg.setAttribute('viewBox','0 '+top+' '+LIVE.W+' '+(bot-top)); }   // só a linha que está tocando
+    const cols=L.cols; let x=L.xEnd;
+    if(cols.length){
+        if(u<=cols[0].u) x=cols[0].x;
+        else for(let i=0;i<cols.length;i++){ const a=cols[i], bU=i+1<cols.length?cols[i+1].u:L.u1, bX=i+1<cols.length?cols[i+1].x:L.xEnd;
+            if(u<bU){ x=a.x+(bX-a.x)*((u-a.u)/Math.max(1e-6,bU-a.u)); break; } }
+    }
+    const ln=svg._cur; ln.style.display=''; ln.setAttribute('x1',x); ln.setAttribute('x2',x); ln.setAttribute('y1',L.y0+30); ln.setAttribute('y2',L.y0+L.h-18);
+    const act=LIVE.heads.filter(h=>h.u<=u+1e-6&&u<h.e-1e-6);
+    const same=act.length===LIVE.act.length&&act.every((h,i)=>h===LIVE.act[i]);
+    if(!same){
+        LIVE.act.forEach(h=>{ if(h.k==='fill') h.el.setAttribute('fill','#111'); else h.el.setAttribute('stroke','#111'); });
+        act.forEach(h=>{ if(h.k==='fill') h.el.setAttribute('fill',LIVE_COL); else h.el.setAttribute('stroke',LIVE_COL); });
+        LIVE.act=act;
+    }
+}
+</script>
+<script>
+/* ============================================================================
    PARTITURA (clave de Sol) — desenhada em SVG, sem bibliotecas externas
    ========================================================================== */
+const PCL=[0,2,4,5,7,9,11], KS_SHARP_L=[3,0,4,1,5,2,6], KS_FLAT_L=[6,2,5,1,4,0,3];
+let KEY={n:0,flat:false};
+function keySigArr(){ const a=[0,0,0,0,0,0,0]; for(let i=0;i<KEY.n;i++) a[(KEY.flat?KS_FLAT_L:KS_SHARP_L)[i]]=KEY.flat?-1:1; return a; }
+let KSIG=keySigArr();
+function spellMidi(m,acc){
+    const pc=((m%12)+12)%12;
+    if(acc){ const b=m-acc, i=PCL.indexOf(((b%12)+12)%12); if(i>=0) return {l:i,a:acc,o:Math.floor(b/12)-1}; }
+    for(let l=0;l<7;l++) if(KSIG[l]&&((PCL[l]+KSIG[l]+12)%12)===pc) return {l,a:KSIG[l],o:Math.floor((m-KSIG[l])/12)-1};
+    const i=PCL.indexOf(pc); if(i>=0) return {l:i,a:0,o:Math.floor(m/12)-1};
+    if(KEY.flat) return {l:PCL.indexOf((pc+1)%12),a:-1,o:Math.floor((m+1)/12)-1};
+    return {l:PCL.indexOf((pc+11)%12),a:1,o:Math.floor((m-1)/12)-1};
+}
+const CUR='sax';
+const INSTR={sax:{get name(){ return SAXTYPES[saxType].n+' (transposto)'; },clef:'treble',sb:30,sm:34}};
+
 const PB_NS='http://www.w3.org/2000/svg';
 function pbEl(parent,tag,attrs,txt){
     const e=document.createElementNS(PB_NS,tag);
@@ -3178,10 +3303,11 @@ function pbEl(parent,tag,attrs,txt){
     parent.appendChild(e); return e;
 }
 const PB_DURS=[32,24,16,12,8,6,4,3,2,1];               // em fusas (1/32); 1 tempo (semínima) = 8
-const PB_MEASURE={'4/4':32,'3/4':24,'2/4':16,'6/8':24};
+const PB_MEASURE={'4/4':32,'3/4':24,'2/4':16,'6/8':24,'6/4':48,'3/2':48,'2/2':32,'9/4':72,'9/8':36,'12/8':48};
+const pbCompound=ts=>ts==='6/8'||ts==='9/8'||ts==='12/8';
 function pbOkPos(p,d,ts){
-    if(ts==='6/8'){
-        if(d===24) return p===0;
+    if(pbCompound(ts)){
+        if(d===24) return p%24===0;
         if(d===16) return false;
         if(d===12) return p%12===0;
         if(d===8)  return p%4===0 && (p%12)+8<=12;
@@ -3192,9 +3318,10 @@ function pbOkPos(p,d,ts){
         return true;
     }
     switch(d){
-        case 32: case 24: return p===0;
+        case 32: return p===0;
+        case 24: return p%24===0;
         case 16: return p%16===0;
-        case 12: return p===0||p===16;
+        case 12: return p%16===0;
         case 8:  return p%8===0;
         case 6:  return p%8===0;
         case 4:  return p%4===0;
@@ -3213,15 +3340,7 @@ function pbSplit(p,len,ts){
     return out;
 }
 const PB_WL=[0,null,1,null,2,3,null,4,null,5,null,6];
-function pbSpell(n){
-    const m=n.midi, acc=n.accidental||0, pc=((m%12)+12)%12;
-    if(acc!==0){
-        const b=m-acc, bpc=((b%12)+12)%12;
-        if(PB_WL[bpc]!=null) return {l:PB_WL[bpc],a:acc,o:Math.floor(b/12)-1};
-    }
-    if(PB_WL[pc]!=null) return {l:PB_WL[pc],a:0,o:Math.floor(m/12)-1};
-    return {l:PB_WL[pc-1],a:1,o:Math.floor(m/12)-1};
-}
+function pbSpell(n){ return spellMidi(n.midi,n.accidental||0); }
 const pbFlags=len=>len>=8?0:len>=4?1:len>=2?2:3;
 const pbDotted=len=>len===24||len===12||len===6||len===3;
 
@@ -3252,12 +3371,12 @@ function pbStaffEvents(list,M,ts,total){
 
 function pbBuildScore(opts){
     opts=opts||{};
-    const ts=document.getElementById('scoreTimeSig').value||'4/4', M=PB_MEASURE[ts]||32, beatU=ts==='6/8'?12:8;
+    const ts=opts.ts||document.getElementById('scoreTimeSig').value||'4/4', M=PB_MEASURE[ts]||32, beatU=pbCompound(ts)?12:8;
     const bpm=parseInt(document.getElementById('scoreBpm').value)||120;
     const title=(opts.title||'').trim();
+    const vsel=(opts.voice===undefined||opts.voice==='all')?null:Number(opts.voice);
     const T=SAXTYPES[saxType].t;                           // altura escrita = altura real + T
-    const notes=scoreNotes.map((n0,i)=>{
-        const n=T?Object.assign({},n0,{midi:n0.midi+T,accidental:0}):n0;
+    const notes=scoreNotes.map((n0,i)=>({n:T?Object.assign({},n0,{midi:n0.midi+T,accidental:0}):n0,i})).filter(x=>vsel===null||x.n.voice===vsel).map(({n,i})=>{
         const sp=pbSpell(n), u=Math.max(0,Math.round((n.beat-1)*8));
         let e=Math.round((n.beat-1+n.duration)*8); if(e<=u) e=u+1;
         return {n,i,u,e,l:sp.l,a:sp.a,o:sp.o,d:sp.o*7+sp.l,midi:n.midi,tied:!!n.tied,arts:n.articulations||[]};
@@ -3265,7 +3384,24 @@ function pbBuildScore(opts){
     if(!notes.length) throw new Error('vazio');
     const end=Math.max(...notes.map(x=>x.e)), nM=Math.max(1,Math.ceil(end/M)), total=nM*M;
     const SP=8, W=840, H=1188, MX=52;
-    const staves=[{clef:'treble',base:30,mid:34,ev:pbStaffEvents(notes,M,ts,total)}];
+    // vozes agudas na clave de Sol e graves na clave de Fá, em pautas separadas (sistema de piano).
+    // 4 vozes: Soprano+Contralto em Sol, Tenor+Baixo em Fá. Outros casos: separa pela altura (Dó central).
+    const TREB={clef:'treble',base:30,mid:34}, BASS={clef:'bass',base:18,mid:22};
+    const vIds=[...new Set(notes.map(x=>x.n.voice))].sort((a,b)=>a-b);
+    let hi=[], lo=[];
+    if(vIds.length>1){
+        if(vIds.length===4){ notes.forEach(x=>(vIds.indexOf(x.n.voice)<2?hi:lo).push(x)); }
+        else notes.forEach(x=>(x.midi>=60?hi:lo).push(x));
+    }
+    let staves;
+    if(hi.length&&lo.length){
+        staves=[Object.assign({},TREB,{ev:pbStaffEvents(hi,M,ts,total)}),Object.assign({},BASS,{ev:pbStaffEvents(lo,M,ts,total)})];
+    } else {
+        const avg=notes.reduce((a,x)=>a+x.midi,0)/notes.length;
+        const c=avg<55?BASS:{clef:INSTR[CUR].clef,base:INSTR[CUR].sb,mid:INSTR[CUR].sm};
+        staves=[Object.assign({},c,{ev:pbStaffEvents(notes,M,ts,total)})];
+    }
+    const STG=4*SP;   // espaço entre as pautas
 
     staves.forEach(st=>{
         let state={}, lastM=-1;
@@ -3273,7 +3409,7 @@ function pbBuildScore(opts){
             if(ev.m!==lastM){ state={}; lastM=ev.m; }
             if(ev.rest) return;
             ev.notes.forEach(h=>{
-                const key=h.l+'/'+h.o, cur=state[key]||0;
+                const key=h.l+'/'+h.o, cur=(key in state)?state[key]:KSIG[h.l];
                 if(h.tieIn){ h.show=null; state[key]=h.a; return; }
                 if(cur!==h.a){ h.show=h.a; state[key]=h.a; }
             });
@@ -3322,19 +3458,19 @@ function pbBuildScore(opts){
         });
         measures.push({m,cols});
     }
-    const clefW=34, tsW=22, AWfull=W-2*MX;
+    const clefW=34, tsW=22, AWfull=W-2*MX, ksW=KEY.n?KEY.n*9+6:0;
     const systems=[]; let cur=null;
     const mWidth=ms=>8+ms.cols.reduce((s,c)=>s+c.left+c.base,0)+6;
     measures.forEach(ms=>{
         const w=mWidth(ms);
         if(!cur){ cur={ms:[ms],w,first:true}; systems.push(cur); }
         else {
-            const av=AWfull-clefW-(cur.first?tsW:0);
+            const av=AWfull-clefW-ksW-(cur.first?tsW:0);
             if(cur.w+w<=av){ cur.ms.push(ms); cur.w+=w; }
             else { cur={ms:[ms],w,first:false}; systems.push(cur); }
         }
     });
-    const sysH=44+4*SP+34+22;
+    const sysH=44+4*SP+(staves.length-1)*(4*SP+STG)+34+22;
     const svgs=[]; let page=null, y=0, pageNo=0;
     const newPage=()=>{
         pageNo++;
@@ -3344,7 +3480,7 @@ function pbBuildScore(opts){
         svgs.push(s); page=s;
         if(pageNo===1){
             pbEl(page,'text',{x:W/2,y:70,'text-anchor':'middle','font-family':'Georgia,Times New Roman,serif','font-size':28,'font-weight':'bold',fill:'#111'},title||'Sem título');
-            pbEl(page,'text',{x:MX,y:96,'font-family':'Georgia,serif','font-size':13,'font-style':'italic',fill:'#555'},(SAXTYPES[saxType].n+' (transposto)'));
+            pbEl(page,'text',{x:MX,y:96,'font-family':'Georgia,serif','font-size':13,'font-style':'italic',fill:'#555'},INSTR[CUR].name);
             pbEl(page,'ellipse',{cx:MX+5,cy:120,rx:4.6,ry:3.4,transform:'rotate(-20 '+(MX+5)+' 120)',fill:'#111'});
             pbEl(page,'line',{x1:MX+9.2,y1:119,x2:MX+9.2,y2:105,stroke:'#111','stroke-width':1.3});
             pbEl(page,'text',{x:MX+18,y:120,'font-family':'Arial,Helvetica,sans-serif','font-size':14,fill:'#111'},'= '+bpm);
@@ -3352,7 +3488,7 @@ function pbBuildScore(opts){
         } else y=60;
     };
     newPage();
-    const place=[];
+    const place=[], heads=[];
     systems.forEach(sys=>{
         if(y+sysH>H-56) newPage();
         place.push({sys,page,y0:y,pageNo});
@@ -3363,13 +3499,13 @@ function pbBuildScore(opts){
     pbEl(svgs[0],'text',{x:W-MX,y:120,'text-anchor':'end','font-family':'Arial,Helvetica,sans-serif','font-size':11,'fill':'#888'},ts+'  ·  Sax Bounce');
 
     const INK='#111', HRX=SP*0.66, HRY=SP*0.46;
-    const pending=staves.map(()=>new Map());
+    const pending=staves.map(()=>new Map()), lay=[];
     const stepY=(st,top,d)=>top+4*SP-(d-st.base)*SP/2;
     place.forEach(({sys,page:pg,y0},si)=>{
-        const tops=staves.map((_,k)=>y0+44+k*(4*SP));
+        const tops=staves.map((_,k)=>y0+44+k*(8*SP));
         const left=MX, firstTs=sys.first;
-        const xStart=left+clefW+(firstTs?tsW:0);
-        const AW=AWfull-clefW-(firstTs?tsW:0);
+        const xStart=left+clefW+ksW+(firstTs?tsW:0);
+        const AW=AWfull-clefW-ksW-(firstTs?tsW:0);
         const pads=sys.ms.length*14;
         const fixed=sys.ms.reduce((s,ms)=>s+ms.cols.reduce((a,c)=>a+c.left,0),0);
         const flex=sys.ms.reduce((s,ms)=>s+ms.cols.reduce((a,c)=>a+c.base,0),0);
@@ -3384,15 +3520,22 @@ function pbBuildScore(opts){
             x+=6; barX.push(x);
         });
         const xEnd=x;
+        lay.push({page:svgs.indexOf(pg),y0,h:sysH,xStart,xEnd,u0:sys.ms[0].m*M,u1:(sys.ms[sys.ms.length-1].m+1)*M,
+            cols:sys.ms.flatMap(ms=>ms.cols.map(c=>({u:c.pos,x:colX.get(ms.m+':'+c.pos)})))});
         staves.forEach((st,k)=>{
             for(let i=0;i<5;i++) pbEl(pg,'line',{x1:left,y1:tops[k]+i*SP,x2:xEnd,y2:tops[k]+i*SP,stroke:INK,'stroke-width':1});
         });
-        const bottomY=tops[0]+4*SP;
+        const bottomY=tops[staves.length-1]+4*SP;
         pbEl(pg,'line',{x1:left,y1:tops[0],x2:left,y2:bottomY,stroke:INK,'stroke-width':1.6});
+        if(staves.length>1) pbEl(pg,'path',{d:`M${left-3},${tops[0]} Q${left-9},${(tops[0]+bottomY)/2} ${left-3},${bottomY}`,fill:'none',stroke:INK,'stroke-width':2.4});
         staves.forEach((st,k)=>{
-            pbTrebleClef(pg,left+8,tops[k]+3*SP,SP);
+            if(st.clef==='alto') pbAltoClef(pg,left+7,tops[k]+2*SP,SP); else if(st.clef==='bass') pbBassClef(pg,left+7,tops[k]+SP,SP); else pbTrebleClef(pg,left+8,tops[k]+3*SP,SP);
+            if(KEY.n){
+                const PS=(KEY.flat?[4,7,3,6,2,5,1]:[8,5,9,6,3,7,4]).map(q=>q-(st.clef==='alto'?1:st.clef==='bass'?2:0));
+                for(let q=0;q<KEY.n;q++) pbAccidental(pg,left+clefW+6+q*9,stepY(st,tops[k],st.base+PS[q]),KEY.flat?-1:1,SP,INK);
+            }
             if(firstTs){
-                const [a,b]=ts.split('/'), tx=left+clefW+8;
+                const [a,b]=ts.split('/'), tx=left+clefW+ksW+8;
                 pbEl(pg,'text',{x:tx,y:tops[k]+2*SP-1,'text-anchor':'middle','font-family':'Georgia,serif','font-size':SP*2.7,'font-weight':'bold',fill:INK},a);
                 pbEl(pg,'text',{x:tx,y:tops[k]+4*SP-1,'text-anchor':'middle','font-family':'Georgia,serif','font-size':SP*2.7,'font-weight':'bold',fill:INK},b);
             }
@@ -3416,14 +3559,16 @@ function pbBuildScore(opts){
                 for(let d=st.base+10; d<=highs; d+=2) pbEl(pg,'line',{x1:cx-HRX*1.7,y1:yOf(d),x2:cx+HRX*1.7+(n.some(h=>h.disp>0)?HRX*2:0),y2:yOf(d),stroke:INK,'stroke-width':1.2});
                 n.forEach(h=>{
                     const hx=cx+h.disp*HRX*2, hy=yOf(h.d); h.hx=hx; h.hy=hy;
+                    let hel, hk='fill';
                     if(ev.len>=32){
-                        pbEl(pg,'ellipse',{cx:hx,cy:hy,rx:HRX*1.15,ry:HRY*1.05,fill:INK});
+                        hel=pbEl(pg,'ellipse',{cx:hx,cy:hy,rx:HRX*1.15,ry:HRY*1.05,fill:INK});
                         pbEl(pg,'ellipse',{cx:hx,cy:hy,rx:HRX*.55,ry:HRY*.95,fill:'#fff',transform:`rotate(-55 ${hx} ${hy})`});
                     } else if(ev.len<16){
-                        pbEl(pg,'ellipse',{cx:hx,cy:hy,rx:HRX,ry:HRY,fill:INK,transform:`rotate(-20 ${hx} ${hy})`});
+                        hel=pbEl(pg,'ellipse',{cx:hx,cy:hy,rx:HRX,ry:HRY,fill:INK,transform:`rotate(-20 ${hx} ${hy})`});
                     } else {
-                        pbEl(pg,'ellipse',{cx:hx,cy:hy,rx:HRX*.95,ry:HRY*.9,fill:'none',stroke:INK,'stroke-width':1.6,transform:`rotate(-22 ${hx} ${hy})`});
+                        hel=pbEl(pg,'ellipse',{cx:hx,cy:hy,rx:HRX*.95,ry:HRY*.9,fill:'none',stroke:INK,'stroke-width':1.6,transform:`rotate(-22 ${hx} ${hy})`}); hk='stroke';
                     }
+                    heads.push({el:hel,k:hk,u:ev.pos,e:ev.pos+ev.len,voice:h.x&&h.x.n?h.x.n.voice:0});
                     if(pbDotted(ev.len)){
                         const onLine=((h.d-st.base)%2+2)%2===0;
                         pbEl(pg,'circle',{cx:cx+HRX*2+(n.some(q=>q.disp>0)?HRX*2:0)+1.5,cy:hy-(onLine?SP/2:0),r:1.5,fill:INK});
@@ -3507,7 +3652,7 @@ function pbBuildScore(opts){
             });
         });
     });
-    return {svgs,W,H};
+    return {svgs,W,H,heads,lay,M};
 }
 
 function pbAccidental(g,x,y,a,SP,ink){
@@ -3555,6 +3700,26 @@ function pbRest(g,ev,cx,top,SP,M,ink){
         pbEl(g,'path',{d:`M${xx-SP*.6},${yy+SP*.1} Q${xx},${yy+SP*.3} ${xx+SP*.35},${yy-SP*.45}`,fill:'none',stroke:ink,'stroke-width':1.4,'stroke-linecap':'round'});
     }
     if(pbDotted(len)) pbEl(g,'circle',{cx:cx+SP*1.2,cy:mid-SP*.3,r:1.5,fill:ink});
+}
+// clave de Dó (3ª linha) — usada pela viola; o ponto central fica sobre a linha do meio (yM)
+function pbAltoClef(g,x,yM,SP){
+    const u=SP, X=a=>(x+a*u).toFixed(2), Y=b=>(yM+b*u).toFixed(2);
+    pbEl(g,'rect',{x:x,y:yM-2*u,width:.62*u,height:4*u,fill:'#111'});
+    pbEl(g,'line',{x1:x+1.02*u,y1:yM-2*u,x2:x+1.02*u,y2:yM+2*u,stroke:'#111','stroke-width':.16*u});
+    pbEl(g,'path',{d:`M${X(1.5)},${Y(-2.0)} C${X(3.5)},${Y(-2.35)} ${X(3.6)},${Y(-.35)} ${X(1.7)},${Y(-.1)} `+
+                     `M${X(1.5)},${Y(2.0)} C${X(3.5)},${Y(2.35)} ${X(3.6)},${Y(.35)} ${X(1.7)},${Y(.1)} `+
+                     `M${X(1.7)},${Y(-.1)} L${X(1.7)},${Y(.1)}`,
+        fill:'none',stroke:'#111','stroke-width':1.7,'stroke-linecap':'round','stroke-linejoin':'round'});
+    pbEl(g,'circle',{cx:x+1.5*u,cy:yM-2*u,r:.3*u,fill:'#111'});
+    pbEl(g,'circle',{cx:x+1.5*u,cy:yM+2*u,r:.3*u,fill:'#111'});
+}
+// clave de Fá (4ª linha) — usada pelo violoncelo; yF = linha do Fá
+function pbBassClef(g,x,yF,SP){
+    const u=SP, P=(a,b)=>`${(x+a*u).toFixed(2)},${(yF+b*u).toFixed(2)}`;
+    pbEl(g,'path',{d:`M${P(.4,0)} C${P(.4,-1.3)} ${P(2.3,-1.2)} ${P(2.4,.5)} C${P(2.45,1.7)} ${P(1.3,2.5)} ${P(-.2,3.1)}`,fill:'none',stroke:'#111','stroke-width':1.7,'stroke-linecap':'round'});
+    pbEl(g,'circle',{cx:x+.4*u,cy:yF,r:.5*u,fill:'#111'});
+    pbEl(g,'circle',{cx:x+3.1*u,cy:yF-.5*u,r:.26*u,fill:'#111'});
+    pbEl(g,'circle',{cx:x+3.1*u,cy:yF+.5*u,r:.26*u,fill:'#111'});
 }
 function pbTrebleClef(g,x,yG,SP){
     const u=SP, P=(a,b)=>`${(x+a*u).toFixed(2)},${(yG+b*u).toFixed(2)}`;
@@ -3847,27 +4012,47 @@ function makePdf(pages){
     return new Blob(chunks,{type:'application/pdf'});
 }
 let scoreData=null, scTimer=0;
+let scFromPlayer=false;
+function withScoreSource(fn){ return scFromPlayer?withPlayerSource(fn,state.allNotes):fn(); }
+function scVoiceList(){
+    if(scFromPlayer) return state.voiceList.map((v,i)=>({id:i,name:v.name}));
+    return voices.filter(v=>scoreNotes.some(n=>n.voice===v.id));
+}
+function fillScVoice(){
+    const sel=$('scVoice'), prev=sel.value||'all', used=scVoiceList();
+    sel.innerHTML='<option value="all">Todas as vozes</option>'+used.map(v=>`<option value="${v.id}">${v.name}</option>`).join('');
+    sel.value=[...sel.options].some(o=>o.value===prev)?prev:'all';
+    sel.parentElement.style.display=used.length>1?'':'none';
+}
 function renderScoreModal(){
     const body=$('scBody'); body.innerHTML=''; scoreData=null; $('scPdf').disabled=true;
     const msg=t=>{ const d=document.createElement('div'); d.className='pb-msg'; d.textContent=t; body.append(d); };
-    if(!scoreNotes.length){ msg('Escreva algumas notas na composição e volte aqui para ver a partitura.'); return; }
+    if(!(scFromPlayer?(state.midiLoaded&&state.allNotes.length):scoreNotes.length)){ msg(scFromPlayer?'Abra um hino para ver a partitura.':'Escreva algumas notas na composição e volte aqui para ver a partitura.'); return; }
     try{
-        scoreData=pbBuildScore({title:$('scTitle').value});
+        scoreData=withScoreSource(()=>pbBuildScore({title:$('scTitle').value,voice:$('scVoice').value,ts:scFromPlayer?playerTs():undefined}));
         scoreData.svgs.forEach(svg=>{ const p=document.createElement('div'); p.className='pb-paper'; svg.removeAttribute('width'); svg.removeAttribute('height'); p.append(svg); body.append(p); });
-        $('scPdf').disabled=false;
+        $('scPdf').disabled=false; $('scPdf').textContent=PRO.ok?'⬇ Baixar PDF':'🔒 Baixar PDF (Pro)';
     }catch(e){ console.error(e); msg('Não foi possível montar a partitura desta composição.'); }
 }
-function openScore(){
-    $('scTitle').value=projName==='Sem título'?'':projName;
+function openScore(fromPlayer){
+    scFromPlayer=fromPlayer===true;
+    $('scTitle').value=scFromPlayer?(fileNameEl.textContent||'').replace(/\.(mid|midi|mxl|xml|musicxml)$/i,''):(projName==='Sem título'?'':projName);
+    fillScVoice();
+    if(scFromPlayer&&state.voiceSel.size===1){ const t=[...state.voiceSel][0], i=state.voiceList.findIndex(v=>v.track===t); if(i>=0) $('scVoice').value=String(i); }
     closeModals(); openModal('mScore'); renderScoreModal();
 }
-$('pbScore').onclick=openScore; $('exScore').onclick=openScore;
+$('pbScore').onclick=()=>openScore(false); $('exScore').onclick=()=>openScore(false);
+$('pbPlayerScore').onclick=()=>{ if(!state.midiLoaded){ say('Abra um hino primeiro'); return; } openScore(true); };
+$('scVoice').onchange=renderScoreModal;
 $('scTitle').oninput=()=>{ clearTimeout(scTimer); scTimer=setTimeout(renderScoreModal,450); };
 $('scPdf').onclick=async()=>{
-    if(!scoreData) return; busy(true);
+    if(!scoreData) return;
+    if(!PRO.ok){ closeModals(); proPaywall('pdf'); return; }   // baixar a partitura em PDF é só Pro
+    busy(true);
     try{
         const pgs=[]; for(const svg of scoreData.svgs) pgs.push(await svgToJpeg(svg,scoreData.W,scoreData.H,2.6));
-        download(safeName($('scTitle').value.trim()||(projName==='Sem título'?'saxbounce':projName))+'.pdf',makePdf(pgs));
+        const vs=$('scVoice').value, vn=vs==='all'?'':' - '+((scVoiceList().find(v=>String(v.id)===vs)||{}).name||'');
+        download(safeName(($('scTitle').value.trim()||(scFromPlayer?'partitura':(projName==='Sem título'?'saxbounce':projName)))+vn)+'.pdf',makePdf(pgs));
         say('Partitura exportada em PDF',true);
     }catch(e){ console.error(e); say('Não foi possível gerar o PDF'); }
     busy(false);
