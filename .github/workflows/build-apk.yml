@@ -108,18 +108,18 @@ jobs:
             export KS_PASS KS_ALIAS
             $BT/apksigner sign --ks release.keystore --ks-key-alias "$KS_ALIAS" \
               --ks-pass env:KS_PASS --key-pass env:KS_PASS \
-              --out sax-bounce.apk aligned.apk
+              --out digitahinos-sax.apk aligned.apk
             echo "APK assinado com a SUA chave."
           else
             keytool -genkeypair -keystore teste.keystore -alias teste -keyalg RSA -keysize 2048 \
               -validity 10000 -storepass android -keypass android -dname "CN=Teste"
             $BT/apksigner sign --ks teste.keystore --ks-key-alias teste \
               --ks-pass pass:android --key-pass pass:android \
-              --out sax-bounce.apk aligned.apk
+              --out digitahinos-sax.apk aligned.apk
             echo "ATENÇÃO: APK assinado com chave de TESTE. Não publique este."
           fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sax-bounce-apk
-          path: sax-bounce.apk
+          name: digitahinos-sax-apk
+          path: digitahinos-sax.apk
