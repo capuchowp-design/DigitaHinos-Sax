@@ -1,6 +1,6 @@
 {
-  "name": "Sax Bounce - Visualizador MIDI",
-  "short_name": "Sax Bounce",
+  "name": "DigitaHinos Sax - Visualizador MIDI",
+  "short_name": "DigitaHinos Sax",
   "description": "Visualizador MIDI e MusicXML com saxofone animado",
   "start_url": "./index.html",
   "display": "standalone",

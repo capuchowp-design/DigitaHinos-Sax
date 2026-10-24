@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Sax Bounce - Visualizador MIDI / MXL</title>
+    <title>DigitaHinos Sax - Visualizador MIDI / MXL</title>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
@@ -436,7 +436,7 @@
             <path d="M9 5l3 3q3 1 3.5 5l2 12q1 6 7.5 4.5q4-1.5 3-7.5" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
             <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#fcad2a"/><stop offset="1" stop-color="#ff3300"/></linearGradient></defs>
         </svg>
-        <span class="logo-name">Sax Bounce</span>
+        <span class="logo-name">DigitaHinos Sax</span>
         <span class="note-count-badge" id="noteCountBadge" style="display:none">0 notas</span>
     </div>
     <div class="header-right">
@@ -471,7 +471,7 @@
                     <path d="M38 22l9 9q9 3 10 14l5 32q3 16 21 12q11-4 8-20" stroke="#f5a524" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                     <defs><linearGradient id="wg" x1="0" y1="0" x2="120" y2="120"><stop stop-color="#fcad2a"/><stop offset="1" stop-color="#ff3300"/></linearGradient></defs>
                 </svg>
-                <h1>Sax Bounce</h1>
+                <h1>DigitaHinos Sax</h1>
                 <p>Carregue um arquivo MIDI, MusicXML (.mxl / .xml) ou crie sua própria partitura</p>
                 <div class="welcome-btns">
                     <label class="welcome-upload" for="welcomeFileInput">Carregar MIDI / MXL
@@ -3044,7 +3044,7 @@ function exportMidi(){
     const all=[...header];
     tracks.forEach(td=>{ const tl=td.length; all.push(0x4D,0x54,0x72,0x6B,(tl>>24)&0xFF,(tl>>16)&0xFF,(tl>>8)&0xFF,tl&0xFF,...td); });
     const url=URL.createObjectURL(new Blob([new Uint8Array(all)],{type:'audio/midi'}));
-    const a=document.createElement('a'); a.href=url; a.download=(window.pbFileBase?window.pbFileBase():'saxbounce')+'.mid'; a.click();
+    const a=document.createElement('a'); a.href=url; a.download=(window.pbFileBase?window.pbFileBase():'digitahinos-sax')+'.mid'; a.click();
     setTimeout(()=>URL.revokeObjectURL(url),2000);
     toast('MIDI exportado ('+voiceIds.length+' vozes)!','success');
 }
@@ -3404,6 +3404,19 @@ function pbBuildScore(opts){
     const STG=4*SP;   // espaço entre as pautas
 
     staves.forEach(st=>{
+        // 8va / 8vb: notas muito acima ou muito abaixo da pauta são escritas uma oitava mais perto, com a indicação de oitava
+        if(opts.o8!==false&&(st.clef==='treble'||st.clef==='bass')){
+            const tr=st.clef==='treble';
+            const dirOf=(ev,loose)=>{ const hi=ev.notes[ev.notes.length-1].d, lo=ev.notes[0].d;
+                if(tr&&hi>=st.base+(loose?8:12)&&lo-7>=st.base-4) return -7;                         // 8va (escreve abaixo)
+                if(!tr&&lo<=st.base-(loose?2:4)&&hi+7<=st.base+12) return 7;                         // 8vb (escreve acima)
+                if(tr&&staves.length===1&&lo<=st.base-(loose?2:4)&&hi+7<=st.base+12) return 7;     // 8vb na clave de Sol (pauta única)
+                return 0; };
+            const mv=(ev,sh)=>{ ev.o8=sh<0?'va':'vb'; ev.notes.forEach(h=>{ h.d+=sh; h.o+=sh/7; }); };
+            st.ev.forEach(ev=>{ if(!ev.rest&&ev.notes.length){ const sh=dirOf(ev,false); if(sh) mv(ev,sh); } });
+            const ne=st.ev.filter(e=>!e.rest&&e.notes.length);   // evento isolado entre dois trechos iguais sobe/desce junto
+            for(let i=1;i<ne.length-1;i++){ const ev=ne[i]; if(ev.o8||!ne[i-1].o8||ne[i-1].o8!==ne[i+1].o8) continue; const sh=dirOf(ev,true); if(sh&&(sh<0?'va':'vb')===ne[i-1].o8) mv(ev,sh); }
+        }
         let state={}, lastM=-1;
         st.ev.forEach(ev=>{
             if(ev.m!==lastM){ state={}; lastM=ev.m; }
@@ -3496,7 +3509,7 @@ function pbBuildScore(opts){
     });
     const total_pages=svgs.length;
     svgs.forEach((s,i)=>pbEl(s,'text',{x:W/2,y:H-26,'text-anchor':'middle','font-family':'Arial,Helvetica,sans-serif','font-size':11,fill:'#888'},(i+1)+' / '+total_pages));
-    pbEl(svgs[0],'text',{x:W-MX,y:120,'text-anchor':'end','font-family':'Arial,Helvetica,sans-serif','font-size':11,'fill':'#888'},ts+'  ·  Sax Bounce');
+    pbEl(svgs[0],'text',{x:W-MX,y:120,'text-anchor':'end','font-family':'Arial,Helvetica,sans-serif','font-size':11,'fill':'#888'},ts+'  ·  DigitaHinos Sax');
 
     const INK='#111', HRX=SP*0.66, HRY=SP*0.46;
     const pending=staves.map(()=>new Map()), lay=[];
@@ -3550,6 +3563,27 @@ function pbBuildScore(opts){
             const top=tops[k], yOf=d=>stepY(st,top,d), midY=top+2*SP;
             const evs=st.ev.filter(ev=>sys.ms.some(ms=>ms.m===ev.m));
             const X=ev=>colX.get(ev.m+':'+ev.pos);
+            if(st.clef==='treble'||st.clef==='bass'){ // indicação 8va/8vb com linha pontilhada
+                const runs=[]; let cr=null;
+                evs.forEach(ev=>{
+                    if(ev.rest) return;
+                    if(ev.o8){
+                        const va=ev.o8==='va', yy0=va?yOf(ev.notes[ev.notes.length-1].d):yOf(ev.notes[0].d);
+                        if(cr&&cr.t!==ev.o8){ runs.push(cr); cr=null; }
+                        if(!cr){ cr={a:ev,b:ev,y:yy0,t:ev.o8}; } else { cr.b=ev; cr.y=va?Math.min(cr.y,yy0):Math.max(cr.y,yy0); }
+                    } else if(cr){ runs.push(cr); cr=null; }
+                });
+                if(cr) runs.push(cr);
+                runs.forEach(r=>{
+                    const va=r.t==='va';
+                    const x1=X(r.a)-HRX*1.6, x2=X(r.b)+HRX*1.9, yy=va?Math.min(top-SP*1.6,r.y-SP*2.2):Math.max(top+4*SP+SP*2.2,r.y+SP*2.2);
+                    const t=pbEl(pg,'text',{x:x1,y:yy+4,'font-family':'Georgia,Times New Roman,serif','font-size':SP*1.7,'font-style':'italic',fill:INK});
+                    t.textContent='8';
+                    const ts2=pbEl(pg,'tspan',{'font-size':SP*1.15,dy:-SP*.15}); ts2.textContent=va?'va':'vb'; t.appendChild(ts2);
+                    pbEl(pg,'line',{x1:x1+SP*3.1,y1:yy,x2:x2,y2:yy,stroke:INK,'stroke-width':1,'stroke-dasharray':'1.8 2.4'});
+                    pbEl(pg,'line',{x1:x2,y1:yy,x2:x2,y2:va?yy+SP*.9:yy-SP*.9,stroke:INK,'stroke-width':1});
+                });
+            }
             const doneGroups=new Set();
             evs.forEach(ev=>{
                 if(ev.rest){ pbRest(pg,ev,X(ev),top,SP,M,INK); return; }
@@ -3738,8 +3772,8 @@ function pbTrebleClef(g,x,yG,SP){
 'use strict';
 const $=id=>document.getElementById(id);
 let projName='Sem título', current=null;      // current: {kind:'library',id} | {kind:'folder',file}
-const safeName=s=>(s||'saxbounce').replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,' ').trim().slice(0,80)||'saxbounce';
-window.pbFileBase=()=>safeName(projName==='Sem título'?'saxbounce':projName);
+const safeName=s=>(s||'digitahinos-sax').replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,' ').trim().slice(0,80)||'digitahinos-sax';
+window.pbFileBase=()=>safeName(projName==='Sem título'?'digitahinos-sax':projName);
 const say=(t,ok)=>toast(t,ok?'success':'error');
 function download(name,blob){
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
@@ -3897,7 +3931,7 @@ $('pbExport').onclick=()=>openModal('mExp');
 $('exMidi').onclick=()=>{ closeModals(); exportMidi(); };
 $('exJson').onclick=()=>{
     if(!scoreNotes.length){ say('Adicione notas primeiro'); return; }
-    download(safeName(projName==='Sem título'?'saxbounce':projName)+FOLDER_EXT,new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'}));
+    download(safeName(projName==='Sem título'?'digitahinos-sax':projName)+FOLDER_EXT,new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'}));
     closeModals(); say('Projeto exportado (JSON)',true);
 };
 
@@ -3972,7 +4006,7 @@ $('exWav').onclick=async()=>{
     closeModals(); busy(true);
     try{
         const r=await renderWav();
-        download(safeName(projName==='Sem título'?'saxbounce':projName)+'.wav',wavBlob(r.buf));
+        download(safeName(projName==='Sem título'?'digitahinos-sax':projName)+'.wav',wavBlob(r.buf));
         say(r.real?'WAV exportado (saxofone real)':'WAV exportado (sintetizador — as gravações do saxofone não carregaram)',true);
     }catch(e){ console.error(e); say('Não foi possível gerar o WAV'); }
     busy(false);
@@ -4052,7 +4086,7 @@ $('scPdf').onclick=async()=>{
     try{
         const pgs=[]; for(const svg of scoreData.svgs) pgs.push(await svgToJpeg(svg,scoreData.W,scoreData.H,2.6));
         const vs=$('scVoice').value, vn=vs==='all'?'':' - '+((scVoiceList().find(v=>String(v.id)===vs)||{}).name||'');
-        download(safeName(($('scTitle').value.trim()||(scFromPlayer?'partitura':(projName==='Sem título'?'saxbounce':projName)))+vn)+'.pdf',makePdf(pgs));
+        download(safeName(($('scTitle').value.trim()||(scFromPlayer?'partitura':(projName==='Sem título'?'digitahinos-sax':projName)))+vn)+'.pdf',makePdf(pgs));
         say('Partitura exportada em PDF',true);
     }catch(e){ console.error(e); say('Não foi possível gerar o PDF'); }
     busy(false);
