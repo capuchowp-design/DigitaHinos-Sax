@@ -967,21 +967,31 @@ function mxlMeasureOrder(ms){
                 if(d==='forward') o.fwd=true;
                 else if(d==='backward') o.back=Math.max(1,(parseInt(r.getAttribute('times'))||2)-1); }
             const en=mxlKid(b,'ending');
-            if(en){ if(en.getAttribute('type')==='start') o.endStart=(en.getAttribute('number')||'1').split(/[,\s]+/).filter(Boolean).map(Number); else o.endStop=true; }
+            if(en){ if(en.getAttribute('type')==='start'){
+                // casas: vale o número IMPRESSO ("1.2." → casas 1 e 2); só sem texto usa o atributo number
+                // (alguns arquivos trazem number="2" para a casa "1.2.", o que fazia a 1ª casa e a repetição sumirem)
+                let ns=(en.textContent.match(/\d+/g)||[]).map(Number).filter(x=>x>0&&x<10);
+                if(!ns.length) ns=(en.getAttribute('number')||'1').split(/[,\s]+/).filter(Boolean).map(Number).filter(x=>x>0);
+                o.endStart=[...new Set(ns.length?ns:[1])].sort((a,b)=>a-b);
+            } else o.endStop=true; }
         });
         return o;
     });
     let act=null; info.forEach(o=>{ if(o.endStart) act=o.endStart; o.ending=act; if(o.endStop) act=null; });
-    const order=[], jumps=new Map(); let i=0,start=0,pass=1,guard=0;
+    // Ao chegar no sinal de repetição, volta até completar todas as passagens: sem casas = 2 (ou o "times" do arquivo);
+    // com casas = o maior número de casa da seção (ex.: casas "1.2." e "3." = 3 passagens, e a 3ª casa segue para o coro).
+    const order=[]; let i=0,start=0,pass=1,jumped=false,guard=0;
+    const needOf=k=>{ let mx=info[k].back+1; for(let j=k;j<n&&info[j].ending;j++) mx=Math.max(mx,...info[j].ending); return mx; };
     while(i<n&&guard++<20000){
         const o=info[i];
-        if(o.fwd) start=i;
+        if(o.fwd){ if(!(jumped&&i===start)) pass=1; start=i; }
+        jumped=false;
         if(o.ending&&!o.ending.includes(pass)){ i++; continue; }
         order.push(i);
         if(o.back){
-            const c=jumps.get(i)||0;
-            if(c<o.back){ jumps.set(i,c+1); pass=c+2; i=start; continue; }
-            jumps.delete(i); pass=1; start=i+1; i++; continue;
+            if(pass<needOf(i)){ pass++; i=start; jumped=true; continue; }
+            start=i+1; if(!(info[i+1]&&info[i+1].ending)) pass=1;   // casa seguinte sem "início" marcado (ex.: só a 2ª casa) ainda usa a passagem atual
+            i++; continue;
         }
         if(o.endStop){ pass=1; start=i+1; }
         i++;
@@ -3369,6 +3379,26 @@ function pbStaffEvents(list,M,ts,total){
     return ev;
 }
 
+// ---- digitação sob as notas: mini-diagrama das chaves do sax (vermelho = mão esquerda, verde = mão direita) ----
+// Usa as mesmas posições (SAXK) e digitações (SAXF) do sax animado, em escala reduzida; vale para qualquer tipo de sax,
+// pois a altura escrita (já transposta) é que define a digitação.
+const PB_SXS=.14;
+const pbSaxDim=(()=>{ let c=null; return ()=>{
+    if(c) return c;
+    const ks=SAXK.filter(k=>k[0]!=='x1').map(([id,hand,dx,y,rx,ry])=>({id,hand,x:dx*PB_SXS,y:(y-295)*PB_SXS,rx:Math.max(1.25,rx*PB_SXS),ry:Math.max(1.15,ry*PB_SXS)}));
+    const x0=Math.min(...ks.map(k=>k.x-k.rx)), x1=Math.max(...ks.map(k=>k.x+k.rx)), y0=Math.min(...ks.map(k=>k.y-k.ry)), y1=Math.max(...ks.map(k=>k.y+k.ry));
+    return c={ks,ox:-(x0+x1)/2,oy:-y0,w:x1-x0+4,h:y1-y0};
+}; })();
+function pbSaxWritten(m){ let w=m; while(w>89) w-=12; while(w<58) w+=12; return w; }
+function pbDrawSaxKeys(pg,cx,y,midi){
+    const D=pbSaxDim(), dn=new Set((SAXF[pbSaxWritten(midi)]||'').split(' ').filter(Boolean));
+    const g=pbEl(pg,'g',{transform:'translate('+cx.toFixed(2)+','+y.toFixed(2)+')'});
+    pbEl(g,'rect',{x:D.ox-4.6,y:D.oy+1,width:9.2,height:D.h-3,rx:3,fill:'#f0ece0'});          // corpo do sax (fundo)
+    D.ks.forEach(k=>{
+        const on=dn.has(k.id), col=k.hand==='E'?'#d32f2f':'#2e9d3a';
+        pbEl(g,'ellipse',{cx:(k.x+D.ox).toFixed(2),cy:(k.y+D.oy).toFixed(2),rx:k.rx.toFixed(2),ry:k.ry.toFixed(2),fill:on?col:'#fff',stroke:on?'#222':'#8a8470','stroke-width':on?.6:.55});
+    });
+}
 function pbBuildScore(opts){
     opts=opts||{};
     const ts=opts.ts||document.getElementById('scoreTimeSig').value||'4/4', M=PB_MEASURE[ts]||32, beatU=pbCompound(ts)?12:8;
@@ -3384,6 +3414,7 @@ function pbBuildScore(opts){
     if(!notes.length) throw new Error('vazio');
     const end=Math.max(...notes.map(x=>x.e)), nM=Math.max(1,Math.ceil(end/M)), total=nM*M;
     const SP=8, W=840, H=1188, MX=52;
+    const VAL=opts.valves!==false;
     // vozes agudas na clave de Sol e graves na clave de Fá, em pautas separadas (sistema de piano).
     // 4 vozes: Soprano+Contralto em Sol, Tenor+Baixo em Fá. Outros casos: separa pela altura (Dó central).
     const TREB={clef:'treble',base:30,mid:34}, BASS={clef:'bass',base:18,mid:22};
@@ -3465,9 +3496,9 @@ function pbBuildScore(opts){
         const ps=[...posSet].sort((a,b)=>a-b);
         const cols=ps.map((p,i)=>{
             const nxt=i<ps.length-1?ps[i+1]:(m+1)*M, gap=nxt-p;
-            let left=0, dots=0;
-            staves.forEach(st=>st.ev.forEach(ev=>{ if(ev.pos===p&&ev.m===m){ if(!ev.rest) left=Math.max(left,ev.leftExtra); if(pbDotted(ev.len)) dots=6; } }));
-            return {pos:p,gap,left,base:14+5.5*Math.sqrt(gap)+dots};
+            let left=0, dots=0, need=0;
+            staves.forEach(st=>st.ev.forEach(ev=>{ if(ev.pos===p&&ev.m===m){ if(!ev.rest){ left=Math.max(left,ev.leftExtra); if(VAL&&ev.notes.some(h=>!h.tieIn)) need=pbSaxDim().w; } if(pbDotted(ev.len)) dots=6; } }));
+            return {pos:p,gap,left,need,base:Math.max(14+5.5*Math.sqrt(gap)+dots,need+2)};
         });
         measures.push({m,cols});
     }
@@ -3483,7 +3514,16 @@ function pbBuildScore(opts){
             else { cur={ms:[ms],w,first:false}; systems.push(cur); }
         }
     });
-    const sysH=44+4*SP+(staves.length-1)*(4*SP+STG)+34+22;
+    const sysH0=44+4*SP+(staves.length-1)*(4*SP+STG)+34+22;
+    systems.forEach(sys=>{
+        sys.h=sysH0;
+        if(!VAL) return;
+        const st=staves[staves.length-1]; let minD=1e9, has8=false;
+        st.ev.filter(ev=>sys.ms.some(ms=>ms.m===ev.m)&&!ev.rest).forEach(ev=>{ ev.notes.forEach(h=>{ minD=Math.min(minD,h.d); }); if(ev.o8==='vb') has8=true; });
+        const low=minD<1e9?Math.max(0,st.base-minD)*SP/2:0;
+        sys.vy=4*SP+Math.max(26,low+22)+(has8?14:0);                       // distância da última pauta até o diagrama
+        sys.h=44+(staves.length-1)*(8*SP)+sys.vy+pbSaxDim().h+16;
+    });
     const svgs=[]; let page=null, y=0, pageNo=0;
     const newPage=()=>{
         pageNo++;
@@ -3493,7 +3533,7 @@ function pbBuildScore(opts){
         svgs.push(s); page=s;
         if(pageNo===1){
             pbEl(page,'text',{x:W/2,y:70,'text-anchor':'middle','font-family':'Georgia,Times New Roman,serif','font-size':28,'font-weight':'bold',fill:'#111'},title||'Sem título');
-            pbEl(page,'text',{x:MX,y:96,'font-family':'Georgia,serif','font-size':13,'font-style':'italic',fill:'#555'},INSTR[CUR].name);
+            pbEl(page,'text',{x:MX,y:96,'font-family':'Georgia,serif','font-size':13,'font-style':'italic',fill:'#555'},INSTR[CUR].name+(VAL?' — digitação sob as notas (vermelho = mão esquerda, verde = mão direita)':''));
             pbEl(page,'ellipse',{cx:MX+5,cy:120,rx:4.6,ry:3.4,transform:'rotate(-20 '+(MX+5)+' 120)',fill:'#111'});
             pbEl(page,'line',{x1:MX+9.2,y1:119,x2:MX+9.2,y2:105,stroke:'#111','stroke-width':1.3});
             pbEl(page,'text',{x:MX+18,y:120,'font-family':'Arial,Helvetica,sans-serif','font-size':14,fill:'#111'},'= '+bpm);
@@ -3503,9 +3543,9 @@ function pbBuildScore(opts){
     newPage();
     const place=[], heads=[];
     systems.forEach(sys=>{
-        if(y+sysH>H-56) newPage();
+        if(y+sys.h>H-56) newPage();
         place.push({sys,page,y0:y,pageNo});
-        y+=sysH;
+        y+=sys.h;
     });
     const total_pages=svgs.length;
     svgs.forEach((s,i)=>pbEl(s,'text',{x:W/2,y:H-26,'text-anchor':'middle','font-family':'Arial,Helvetica,sans-serif','font-size':11,fill:'#888'},(i+1)+' / '+total_pages));
@@ -3533,7 +3573,7 @@ function pbBuildScore(opts){
             x+=6; barX.push(x);
         });
         const xEnd=x;
-        lay.push({page:svgs.indexOf(pg),y0,h:sysH,xStart,xEnd,u0:sys.ms[0].m*M,u1:(sys.ms[sys.ms.length-1].m+1)*M,
+        lay.push({page:svgs.indexOf(pg),y0,h:sys.h,xStart,xEnd,u0:sys.ms[0].m*M,u1:(sys.ms[sys.ms.length-1].m+1)*M,
             cols:sys.ms.flatMap(ms=>ms.cols.map(c=>({u:c.pos,x:colX.get(ms.m+':'+c.pos)})))});
         staves.forEach((st,k)=>{
             for(let i=0;i<5;i++) pbEl(pg,'line',{x1:left,y1:tops[k]+i*SP,x2:xEnd,y2:tops[k]+i*SP,stroke:INK,'stroke-width':1});
@@ -3685,6 +3725,16 @@ function pbBuildScore(opts){
                 }
             });
         });
+        if(VAL){
+            const seen=new Map();   // por coluna: a nota mais aguda que ataca (a melodia que o sax toca)
+            staves.forEach(st=>st.ev.filter(ev=>sys.ms.some(ms=>ms.m===ev.m)&&!ev.rest).forEach(ev=>{
+                const cx=colX.get(ev.m+':'+ev.pos); if(cx==null) return;
+                ev.notes.filter(h=>!h.tieIn).forEach(h=>{ const key=ev.m+':'+ev.pos, c=seen.get(key); if(!c||h.midi>c.midi) seen.set(key,{cx,midi:h.midi}); });
+            }));
+            const yD=tops[staves.length-1]+sys.vy-4;
+            seen.forEach(c=>pbDrawSaxKeys(pg,c.cx,yD,c.midi));
+            pbEl(pg,'text',{x:left+2,y:yD+14,'font-family':'Arial,sans-serif','font-size':9,'font-style':'italic',fill:'#777'},'chaves');
+        }
     });
     return {svgs,W,H,heads,lay,M};
 }
