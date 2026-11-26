@@ -1,0 +1,30 @@
+name: Baixar sons do sax (rodar 1 vez)
+
+# Baixa os sons originais de saxofone, converte para mono/MP3 leve e grava as pastas
+# samples/ e vendor/ (Tone.js) neste repositório. Depois disso o app toca sem depender da internet.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Garantir ffmpeg
+        run: which ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+      - name: Baixar e converter
+        run: node scripts/baixar-samples.js
+      - name: Gravar no repositório
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add samples vendor
+          git diff --cached --quiet && { echo "Nada mudou."; exit 0; }
+          git commit -m "Sons do sax e Tone.js locais"
+          git push

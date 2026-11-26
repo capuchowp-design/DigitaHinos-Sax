@@ -1,7 +1,25 @@
-name: Gerar APK
+name: Gerar APK e AAB (Sax)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:      # botão "Run workflow" na aba Actions
+    inputs:
+      canal:
+        description: 'play = .aab para a Google Play (Billing, sem Pix) | apkpure = .apk com Pix'
+        type: choice
+        options: [play, apkpure]
+        default: play
+      anuncios_teste:
+        description: 'Marcado = anúncios de TESTE do Google (use nos testes). DESMARQUE só no build que vai para produção.'
+        type: boolean
+        default: true
+  push:
+    tags: ['v*']          # ou crie uma tag v1.0.1, v1.0.2...
+
+env:
+  CANAL: ${{ inputs.canal || 'apkpure' }}   # tag v* continua gerando o APK de sempre
+  ADS_TESTE: ${{ inputs.anuncios_teste == false && 'false' || 'true' }}
+  # >>> TROQUE pelo ID do APP do Sax no AdMob (formato ca-app-pub-XXXX~YYYY). O valor abaixo é o ID de TESTE do Google.
+  ADMOB_APP_ID: ca-app-pub-3940256099942544~3347511713
 
 jobs:
   build:
@@ -13,7 +31,7 @@ jobs:
         with:
           node-version: 22
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -21,80 +39,91 @@ jobs:
       - name: Instalar dependências
         run: npm install
 
-      - name: Montar pasta www
+      - name: Conferir IDs do AdMob (build de produção)
+        if: env.CANAL == 'play' && env.ADS_TESTE == 'false'
         run: |
-          rm -rf www && mkdir www
-          for f in *.html *.js *.json *.png *.svg *.css *.webp *.jpg *.ico *.mid *.midi; do
-            [ -f "$f" ] || continue
-            case "$f" in package.json|package-lock.json|capacitor.config.json) continue;; esac
-            cp "$f" www/
-          done
-          [ -d hinos ] && cp -r hinos www/hinos
-          cat > www/native-bridge.js <<'BRIDGE'
-          (function () {
-            var C = window.Capacitor;
-            if (!C || !C.isNativePlatform || !C.isNativePlatform()) return;
-            var origClick = HTMLAnchorElement.prototype.click;
-            function toBase64(blob) {
-              return new Promise(function (ok, err) {
-                var r = new FileReader();
-                r.onload = function () { ok(String(r.result).split(',')[1]); };
-                r.onerror = err;
-                r.readAsDataURL(blob);
-              });
-            }
-            async function salvarECompartilhar(a) {
-              var nome = (a.download || 'arquivo').replace(/[\\/:*?"<>|]+/g, '_');
-              try {
-                var P = C.Plugins || {};
-                var blob = await (await fetch(a.href)).blob();
-                var dados = await toBase64(blob);
-                var w = await P.Filesystem.writeFile({ path: nome, data: dados, directory: 'CACHE' });
-                await P.Share.share({ title: nome, files: [w.uri], dialogTitle: 'Salvar ou compartilhar' });
-              } catch (e) {
-                var msg = String((e && e.message) || e);
-                if (/cancel/i.test(msg)) return;
-                alert('Não foi possível salvar o arquivo: ' + msg);
-              }
-            }
-            HTMLAnchorElement.prototype.click = function () {
-              if (this.download && /^blob:/.test(this.href)) { salvarECompartilhar(this); return; }
-              return origClick.apply(this, arguments);
-            };
-          })();
-          BRIDGE
-          sed -i '0,/<head[^>]*>/s//&\n<script src="native-bridge.js"><\/script>/' www/index.html
-          grep -c 'native-bridge.js' www/index.html
-          ls www
+          if echo "$ADMOB_APP_ID" | grep -q "3940256099942544"; then
+            echo "::error::Build de produção com o ID de TESTE do AdMob. Troque ADMOB_APP_ID neste arquivo e adRewardedId no pro-config.js pelos IDs reais do app Sax."
+            exit 1
+          fi
+          if grep -q "3940256099942544" pro-config.js; then
+            echo "::error::pro-config.js ainda tem o bloco de anúncio de TESTE (adRewardedId). Troque pelo ID real do Sax."
+            exit 1
+          fi
+
+      - name: Conferir chave de assinatura (canal play)
+        if: env.CANAL == 'play'
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KS_B64" ]; then
+            echo "::error::Canal play exige os secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD e KEY_ALIAS."
+            exit 1
+          fi
+
+      - name: Montar pasta www
+        run: npm run prepare:www
 
       - name: Criar projeto Android
         run: |
           npx cap add android
           npx cap sync android
 
+      - name: ID do app AdMob no AndroidManifest (todos os canais)
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i "s#</application>#    <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$ADMOB_APP_ID\"/>\n    </application>#" $M
+          grep -q "APPLICATION_ID" $M || { echo "::error::Não consegui inserir o ID do AdMob no AndroidManifest"; exit 1; }
+          # Permissão do ID de publicidade (Android 13+): exigida pela Play porque o app declara que usa anúncios
+          grep -q "permission.AD_ID" $M || sed -i "s#</manifest>#    <uses-permission android:name=\"com.google.android.gms.permission.AD_ID\"/>\n</manifest>#" $M
+          grep -q "permission.AD_ID" $M || { echo "::error::Não consegui inserir a permissão AD_ID no AndroidManifest"; exit 1; }
+
       - name: Ícone do app
         run: |
           R=android/app/src/main/res
           rm -rf $R/mipmap-anydpi-v26
-          for pair in mdpi:96 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
-            d=${pair%%:*}; s=${pair##*:}
-            cp icon-${s}x${s}.png $R/mipmap-$d/ic_launcher.png
-            cp icon-${s}x${s}.png $R/mipmap-$d/ic_launcher_round.png
-            cp icon-${s}x${s}.png $R/mipmap-$d/ic_launcher_foreground.png
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            for f in ic_launcher ic_launcher_round ic_launcher_foreground; do
+              cp android-icons/mipmap-$d/$f.png $R/mipmap-$d/$f.png
+            done
           done
 
       - name: Versão do app
         run: |
           sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
           sed -i "s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -q "versionCode ${{ github.run_number }}" android/app/build.gradle || { echo "::error::Não consegui definir o versionCode no build.gradle (o Google Play recusaria a atualização)."; exit 1; }
+          echo "versionCode=${{ github.run_number }}"
 
-      - name: Compilar (release)
+      - name: Compilar APK (apkpure)
+        if: env.CANAL == 'apkpure'
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Assinar
+      - name: Compilar e assinar AAB (play)
+        if: env.CANAL == 'play'
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          cd android && chmod +x gradlew && ./gradlew bundleRelease && cd ..
+          echo "$KS_B64" | base64 -d > release.keystore
+          jarsigner -keystore release.keystore -storepass "$KS_PASS" -keypass "$KS_PASS" \
+            -signedjar digitahinos-sax.aab android/app/build/outputs/bundle/release/app-release.aab "$KS_ALIAS"
+          echo "AAB assinado com a SUA chave."
+
+      - name: Conferir permissão AD_ID dentro do AAB final (canal play)
+        if: env.CANAL == 'play'
+        run: |
+          unzip -p digitahinos-sax.aab base/manifest/AndroidManifest.xml | strings | grep -q "com.google.android.gms.permission.AD_ID" \
+            && echo "OK: permissão AD_ID presente no AAB." \
+            || { echo "::error::A permissão AD_ID NÃO está no AAB final."; exit 1; }
+
+      - name: Assinar com a sua chave (se existir) ou usar chave de teste
+        if: env.CANAL == 'apkpure'
         env:
           KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
           KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -116,10 +145,17 @@ jobs:
             $BT/apksigner sign --ks teste.keystore --ks-key-alias teste \
               --ks-pass pass:android --key-pass pass:android \
               --out digitahinos-sax.apk aligned.apk
-            echo "ATENÇÃO: APK assinado com chave de TESTE. Não publique este."
+            echo "APK assinado com chave de TESTE (não use para publicar)."
           fi
 
       - uses: actions/upload-artifact@v4
+        if: env.CANAL == 'apkpure'
         with:
           name: digitahinos-sax-apk
           path: digitahinos-sax.apk
+
+      - uses: actions/upload-artifact@v4
+        if: env.CANAL == 'play'
+        with:
+          name: digitahinos-sax-aab
+          path: digitahinos-sax.aab
