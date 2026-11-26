@@ -1,5 +1,5 @@
 // Mude este número a CADA publicação nova no GitHub (v3 -> v4 -> v5...)
-const CACHE_NAME = 'digitahinos-sax-v16';
+const CACHE_NAME = 'digitahinos-sax-v17';
 const CORE = ['./', './index.html', './manifest.json', './pro-config.js'];
 const EXTRA = [
   './icon-192x192.png', './icon-512x512.png', './apple-touch-icon.png', './favicon-32x32.png',
@@ -51,6 +51,18 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(req).then(res => { const c = res.clone(); caches.open(CACHE_NAME).then(ca => ca.put(req, c)); return res; })
                 .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Sons (samples/) e Tone.js (vendor/) do próprio app: pesados e quase nunca mudam -> CACHE PRIMEIRO
+  // (a cada troca desses arquivos, mude o número do CACHE_NAME acima)
+  if (url.origin === self.location.origin && /\/(samples|vendor)\//.test(url.pathname)) {
+    event.respondWith(
+      caches.match(req).then(cached => cached || fetch(req).then(res => {
+        if (res && res.status === 200) { const c = res.clone(); caches.open(CACHE_NAME).then(ca => ca.put(req, c)); }
+        return res;
+      }))
     );
     return;
   }
