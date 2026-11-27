@@ -1320,7 +1320,7 @@ async function loadPianoFrom(base,out){
         const t=setTimeout(()=>{ if(!done){ done=true; reject(new Error('timeout')); } },45000);
         let smp;
         try{
-            smp=new Tone.Sampler({ urls, baseUrl:base, release:0.35,
+            smp=new Tone.Sampler({ urls, baseUrl:base, release:(window.LITE?0.25:0.35),
                 onload:()=>{ if(done){ try{smp.dispose();}catch(e){} return; } done=true; clearTimeout(t); resolve(smp); },
                 onerror:err=>{ if(!done){ done=true; clearTimeout(t); try{smp.dispose();}catch(e){} reject(err||new Error('erro')); } }
             }).connect(out);
