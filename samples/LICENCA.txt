@@ -1,0 +1,3 @@
+Gravações de saxofone: projeto tonejs-instruments (Nicholas Brosowsky),
+licença Creative Commons Attribution 3.0 (CC-BY 3.0): https://github.com/nbrosowsky/tonejs-instruments
+Os arquivos aqui foram convertidos para mono/MP3 (64k) para o app ficar mais leve.
